@@ -1,6 +1,6 @@
 # 🖥️ 다중 매장 키오스크 및 중앙 관리 서버 시스템 (Kiosk Project)
 
-Python(PyQt5, Socket 통신)과 데이터베이스(SQLite / MySQL)를 활용하여 **독립된 2대의 키오스크 기기(보다수 커피, 김밥천국)**와 **중앙 서버** 간의 실시간 주문 및 데이터 관리 시스템을 구축하는 프로젝트입니다.
+Python(Tkinter / CustomTkinter, Socket 통신)과 데이터베이스(SQLite / MySQL)를 활용하여 **독립된 2대의 키오스크 기기(보다수 커피, 김밥천국)**와 **중앙 서버** 간의 실시간 주문 및 데이터 관리 시스템을 구축하는 프로젝트입니다.
 
 ---
 
@@ -55,7 +55,7 @@ Python(PyQt5, Socket 통신)과 데이터베이스(SQLite / MySQL)를 활용하�
 | 구분 | 사용 기술 및 라이브러리 |
 | :--- | :--- |
 | **Language** | Python 3.x |
-| **UI Framework** | PyQt5 |
+| **UI Framework** | Tkinter / CustomTkinter (`customtkinter`) |
 | **Network** | Python `socket`, `threading` |
 | **Database** | SQLite (기본 내장) / MySQL (`pymysql`) |
 | **IDE** | VS Code |
@@ -66,7 +66,7 @@ Python(PyQt5, Socket 통신)과 데이터베이스(SQLite / MySQL)를 활용하�
 
 ### 1단계: 필요 라이브러리 설치
 ```bash
-pip install PyQt5
+pip install customtkinter
 ```
 
 ### 2단계: 중앙 서버 실행
