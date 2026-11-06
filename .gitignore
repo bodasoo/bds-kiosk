@@ -15,3 +15,7 @@ env/
 .vscode/
 .idea/
 
+# SQLite WAL/SHM temporary files
+*.db-shm
+*.db-wal
+

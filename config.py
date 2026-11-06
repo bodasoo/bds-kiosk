@@ -1,7 +1,7 @@
 """
 [1주차 산출물] 공통 환경 설정 및 보안/DB 설정 모듈 (config.py)
 - 중앙 서버(server.py)와 4개의 클라이언트(키오스크 1·2, 주방 화면, 고객용 가상 모바일 폰)가
-  공통으로 참조하는 네트워크, 보안(API Key & SSL), MySQL DB 설정값을 정의합니다.
+  공통으로 참조하는 네트워크, 보안(API Key & SSL), SQLite DB 설정값을 정의합니다.
 """
 
 import os
@@ -13,7 +13,7 @@ SERVER_HOST = os.getenv("BDS_SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.getenv("BDS_SERVER_PORT", "8443"))
 BASE_URL = f"https://{SERVER_HOST}:{SERVER_PORT}"
 
-# SSL/TLS 인증서 파일 경로 (generate_cert.py 실행 시 생성됨)
+# 프로젝트 기본 경로 및 SSL/TLS 인증서 파일 경로
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SSL_CERT_FILE = os.path.join(BASE_DIR, "cert.pem")
 SSL_KEY_FILE = os.path.join(BASE_DIR, "key.pem")
@@ -36,12 +36,6 @@ DEFAULT_HEADERS = {
 POLLING_INTERVAL_SEC = 1.5  # 주방 화면 및 고객용 가상 모바일 폰 폴링 간격 (1~2초)
 
 # ==========================================
-# 4. MySQL 데이터베이스 연결 설정
+# 4. SQLite 데이터베이스 파일 경로 설정 (Python 기본 내장)
 # ==========================================
-MYSQL_HOST = os.getenv("BDS_DB_HOST", "127.0.0.1")
-MYSQL_PORT = int(os.getenv("BDS_DB_PORT", "3306"))
-MYSQL_USER = os.getenv("BDS_DB_USER", "root")
-MYSQL_PASSWORD = os.getenv("BDS_DB_PASSWORD", "1234")  # 로컬 MySQL 비밀번호에 맞게 변경 가능
-MYSQL_DB_NAME = os.getenv("BDS_DB_NAME", "bds_kiosk")
-MYSQL_CHARSET = "utf8mb4"
-
+SQLITE_DB_PATH = os.path.join(BASE_DIR, "kiosk.db")
