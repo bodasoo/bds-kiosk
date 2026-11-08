@@ -1,6 +1,6 @@
 # 📋 멀티 클라이언트 키오스크 및 주방/고객 연동 시스템 개발 계획서 (Project Plan)
 
-본 문서는 **'통신SW설계'** 과목의 7대 설계 조건과 조별 확정 요구사항(**FastAPI + MySQL + HTTPS(SSL/TLS) + API Key 인증 + 4종의 독립 Tkinter 클라이언트 + 백그라운드 폴링**)을 기반으로 작성된 **3인 팀 맞춤형 프로젝트 계획서 및 발표/디펜스 가이드**입니다.
+본 문서는 **'통신SW설계'** 과목의 7대 설계 조건과 조별 확정 요구사항(**FastAPI + SQLite3 + HTTPS(SSL/TLS) + API Key 인증 + 4종의 독립 Tkinter 클라이언트 + 백그라운드 폴링**)을 기반으로 작성된 **3인 팀 맞춤형 프로젝트 계획서 및 발표/디펜스 가이드**입니다.
 
 ---
 
@@ -8,7 +8,7 @@
 
 ### ① 주제 (Topic)
 * **멀티 클라이언트 키오스크 및 주방/고객 실시간 연동 시스템**
-  * 독립된 2대의 매장 키오스크(보다수 커피, 김밥천국)와 주방 디스플레이(KDS), **고객용 가상 모바일 폰**이 중앙 FastAPI 서버 및 MySQL DB를 통해 실시간으로 연동되는 통합 주문·조리·호출 시스템
+  * 독립된 2대의 매장 키오스크(보다수 커피, 김밥천국)와 주방 디스플레이(KDS), **고객용 가상 모바일 폰**이 중앙 FastAPI 서버 및 **SQLite3 DB(`kiosk.db`)**를 통해 실시간으로 연동되는 통합 주문·조리·호출 시스템
 
 ---
 
@@ -23,7 +23,7 @@
 ### ③ 시스템 및 스레드 구성 (서버/클라이언트 역할 & 스레드 동기화 설계)
 
 #### 1) 서버 및 멀티클라이언트 구성
-* **중앙 서버 (`server.py`)**: `FastAPI` + `Uvicorn` 기반 REST API 서버로 다중 클라이언트의 동시 HTTP 요청을 비동기/멀티스레드로 완벽 지원하며, `MySQL` DB와 연동하여 주문 접수 및 조리 상태를 통합 관리함.
+* **중앙 서버 (`server.py`)**: `FastAPI` + `Uvicorn` 기반 REST API 서버로 다중 클라이언트의 동시 HTTP 요청을 비동기/멀티스레드로 완벽 지원하며, **`SQLite3` DB(`kiosk.db`)**와 연동하여 주문 접수 및 조리 상태를 통합 관리함.
 * **독립 클라이언트 4종 (`Tkinter`)**:
   1. `kiosk_client1.py`: 보다수 커피 키오스크 (`HOT`/`ICE`, 포장/매장식사, 수저 옵션)
   2. `kiosk_client2.py`: 김밥천국 키오스크 (`당근`/`오이` 제외, 포장/매장식사, 수저 옵션)
@@ -37,9 +37,9 @@
 #### 3) 스레드 동기화(`threading.Lock`) 미사용 이유 및 동시성 처리 방법
 * **결론**: 파이썬 코드 레벨의 명시적 스레드 락(`threading.Lock`, `Mutex`, `Semaphore`)은 **미사용**.
 * **이유 및 처리 방법**:
-  1. **서버 측 공유 데이터 동기화 $\rightarrow$ 중앙 MySQL DB 트랜잭션에 위임**:
-     * 서버 메모리의 전역 변수(In-Memory List/Dict)를 공유 메모리로 사용하지 않고 모든 상태 데이터를 중앙 **MySQL RDBMS**에 저장함.
-     * 다중 클라이언트가 동시에 주문하거나 상태를 변경할 때 발생하는 경쟁 상태(Race Condition)는 **MySQL InnoDB 엔진의 트랜잭션(ACID)과 Row-level Lock(행 단위 잠금)**이 자동으로 직렬화하여 데이터 정합성을 100% 보장함.
+  1. **서버 측 공유 데이터 동기화 $\rightarrow$ 중앙 SQLite3 DB 트랜잭션(ACID) 및 WAL 모드에 위임**:
+     * 서버 메모리의 전역 변수(In-Memory List/Dict)를 공유 메모리로 사용하지 않고 모든 상태 데이터를 중앙 **SQLite3 RDBMS(`kiosk.db`)**에 저장함.
+     * 다중 클라이언트가 동시에 주문하거나 상태를 변경할 때 발생하는 경쟁 상태(Race Condition)는 **SQLite3 엔진의 트랜잭션(ACID)과 `WAL(Write-Ahead Logging)` 동시성 잠금**이 자동으로 직렬화하여 데이터 정합성을 100% 보장함.
   2. **클라이언트 측 UI 스레드 안전성 $\rightarrow$ `Tkinter` 메인 스레드 이벤트 큐(`root.after`)로 해결**:
      * 각 클라이언트 내부의 백그라운드 스레드는 오직 네트워크 통신(`requests`)만 수행하고 UI 위젯 메모리를 직접 수정하지 않음.
      * 통신 완료 후 화면 갱신은 `root.after()`를 통해 **Tkinter 메인 스레드 대기열에 순서대로 위임(Message Passing)**하므로, 공유 메모리 충돌 자체가 발생하지 않는 무잠금(Lock-free) 구조를 달성함.
@@ -51,7 +51,7 @@
 | 구분 | 적용 기술 | 상세 구현 내용 |
 | :--- | :--- | :--- |
 | **UI 형태** | Python `Tkinter` | 내장 표준 GUI 라이브러리를 활용한 4종의 독립 데스크톱 클라이언트 구현 |
-| **DB 연결** | `MySQL` (`pymysql`) | `stores`, `menus`, `orders`, `order_items` 4개 정규화 테이블 연동 |
+| **DB 연결** | **`SQLite3` (`sqlite3` 내장 RDBMS)** | `kiosk.db` 내 `stores`, `menus`, `orders`, `order_items` 4개 정규화 테이블 연동 (`WAL` 모드 적용) |
 | **클라이언트 인증** | **API Key 헤더 인증** | 클라이언트-서버 간 공유 비밀키를 HTTP 헤더(`access_token`)로 전송, FastAPI `Security(APIKeyHeader)`로 인가된 기기만 허용 (`403 Forbidden` 차단) |
 | **통신 암호화** | **HTTPS (SSL/TLS)** | 자체 서명 SSL 인증서(`cert.pem`, `key.pem`)를 Uvicorn 서버 및 클라이언트에 적용하여 `access_token` 헤더와 주문 JSON 페이로드 전체를 암호화 전송 |
 
@@ -61,7 +61,7 @@
 
 #### 📊 정량적 목표 (Quantitative Goals)
 1. **핵심 REST API 구축 및 매칭률**: 주문 생성, 메뉴 조회, 주방 주문 폴링, 주문 접수, 조리 완료, 고객 알림 폴링 등 **핵심 서버 API 6종 100% 구현 및 요청-응답 스키마 매칭률 100%** 달성
-2. **멀티 클라이언트 동시 처리 정합성**: **4개의 독립 클라이언트**가 동시에 구동 및 요청을 전송할 때 **주문 데이터 유실률 0% (MySQL 저장 성공률 100%)** 달성
+2. **멀티 클라이언트 동시 처리 정합성**: **4개의 독립 클라이언트**가 동시에 구동 및 요청을 전송할 때 **주문 데이터 유실률 0% (SQLite3 저장 성공률 100%)** 달성
 3. **실시간 알림 동기화 지연 시간(Latency)**: 주방 화면에서 `[주문 접수]` 또는 `[조리 완료]` 클릭 후 **고객용 가상 모바일 폰**에 알림 팝업/메시지가 출력되기까지의 **종단 간(End-to-End) 반영 시간 2.0초 이내** 달성
 4. **서버 응답 속도 및 UI 반응성**: 단건 주문(`POST /order`) 평균 응답 시간 **200ms 이내**, 백그라운드 스레드 분리를 통한 통신 중 **클라이언트 UI 멈춤(Freezing) 시간 0초**
 5. **보안 차단율**: 미인가 API Key 또는 `access_token` 헤더 누락 요청에 대한 **서버 접근 차단율 100% (`HTTP 403 Forbidden`)**
@@ -75,11 +75,11 @@
 
 ### ⑥ 3인 팀 맞춤형 업무 분담 (Role Division)
 
-3명의 조원이 각각 **① 중앙 서버/DB/보안**, **② 키오스크 클라이언트 2종**, **③ 주방 화면 & 고객 앱 폴링 연동**을 전담하여 역할 경계가 명확하고 병렬 개발이 가능하도록 구성했습니다.
+3명의 조원이 각각 **① 중앙 서버/DB/보안**, **② 키오스크 클라이언트 2종**, **③ 주방 화면 & 고객 모바일 폰 폴링 연동**을 전담하여 역할 경계가 명확하고 병렬 개발이 가능하도록 구성했습니다.
 
 | 담당자 | 담당 파트 | 주요 담당 파일 | 세부 역할 및 개발 내용 |
 | :---: | :--- | :--- | :--- |
-| **팀원 1** | **백엔드 중앙 서버 &<br/>MySQL DB / 보안 설계** | `server.py`<br/>`database.py`<br/>`generate_cert.py` | • MySQL 4개 테이블(`stores`, `menus`, `orders`, `order_items`) 스키마 설계 및 초기 메뉴 23종 자동 Seeding<br/>• FastAPI 기반 주문/주방/알림 핵심 REST API 6종 구현<br/>• SSL/TLS 자체 서명 인증서(`cert.pem`, `key.pem`) 발급 및 `access_token` API Key 보안 인증 모듈 구현 |
+| **팀원 1** | **백엔드 중앙 서버 &<br/>SQLite3 DB / 보안 설계** | `server.py`<br/>`database.py`<br/>`generate_cert.py` | • SQLite3(`kiosk.db`) 4개 테이블(`stores`, `menus`, `orders`, `order_items`) 스키마 설계 및 초기 메뉴 23종 자동 Seeding<br/>• FastAPI 기반 주문/주방/알림 핵심 REST API 6종 구현<br/>• SSL/TLS 자체 서명 인증서(`cert.pem`, `key.pem`) 발급 및 `access_token` API Key 보안 인증 모듈 구현 |
 | **팀원 2** | **매장별 키오스크<br/>클라이언트 2종 개발** | `kiosk_client1.py`<br/>`kiosk_client2.py` | • **보다수 커피 키오스크(`kiosk_client1.py`)**: 카테고리 탭, 음료 `HOT`/`ICE` 선택, 장바구니 Tkinter GUI 구현<br/>• **김밥천국 키오스크(`kiosk_client2.py`)**: 김밥 전용 `당근 제외`/`오이 제외` 체크박스 옵션 및 식사류 UI 구현<br/>• 공통 옵션(매장/포장, 수저 여부) 및 UI 렉 방지를 위한 백그라운드 스레드 HTTPS `POST /order` 통신 구현 |
 | **팀원 3** | **주방 화면 & 고객용 가상 모바일 폰<br/>(실시간 폴링 연동)** | `kitchen_client.py`<br/>`app_client.py` | • **주방 화면(`kitchen_client.py`)**: 1~2초 주기 신규 주문 백그라운드 폴링 스레드 및 `[주문 접수]` / `[조리 완료]` 비동기 상태 변경 구현<br/>• **고객용 가상 모바일 폰(`app_client.py`)**: 스마트폰 프레임 형태의 Tkinter UI 및 1~2초 주기 상태 폴링 스레드로 조리 시작/픽업 완료 실시간 모바일 알림 구현<br/>• `root.after()` 기반 Tkinter 메인 스레드 안전 UI 업데이트 및 전체 통합 시나리오 테스트 주도 |
 
@@ -89,7 +89,7 @@
 * **공식 문서**:
   * FastAPI Official Documentation - Security & APIKeyHeader (`https://fastapi.tiangolo.com/tutorial/security/`)
   * Uvicorn Official Documentation - HTTPS / SSL Configuration (`https://www.uvicorn.org/deployment/#running-with-https`)
-  * Python Official Documentation - `tkinter`, `threading` (`https://docs.python.org/3/library/threading.html`)
+  * Python Official Documentation - `sqlite3`, `tkinter`, `threading` (`https://docs.python.org/3/library/sqlite3.html`)
 * **AI 활용 내역 (필수 첨부)**:
   * Google Gemini / Antigravity 아키텍처 설계, DB 스키마 정규화, 스레드 분리 및 HTTPS/API Key 구현 프롬프트 캡쳐본 첨부
 
@@ -102,7 +102,7 @@
 
 ### Q1. "왜 파이썬에서 `threading.Lock` 같은 스레드 동기화를 사용하지 않았나요?"
 * **A1 (서버 동시성 방어)**:
-  "저희는 공유 데이터를 파이썬 서버의 메모리 변수(In-Memory)에 두지 않고 **중앙 MySQL 데이터베이스**에 두도록 아키텍처를 설계했습니다. 여러 키오스크가 동시에 주문 요청을 보내더라도 **MySQL InnoDB 엔진의 트랜잭션(ACID)과 행 단위 잠금(Row-level Lock)**이 데이터 충돌(Race Condition)을 DB 계층에서 완벽히 제어하므로, 파이썬 애플리케이션 코드에서 불필요한 전역 Lock을 걸어 성능을 저하시킬 필요가 없었습니다."
+  "저희는 공유 데이터를 파이썬 서버의 메모리 변수(In-Memory)에 두지 않고 **중앙 SQLite3 데이터베이스(`kiosk.db`)**에 두도록 아키텍처를 설계했습니다. 여러 키오스크가 동시에 주문 요청을 보내더라도 **SQLite3의 트랜잭션(ACID)과 `WAL(Write-Ahead Logging)` 동시성 잠금**이 데이터 충돌(Race Condition)을 DB 계층에서 완벽히 제어하므로, 파이썬 애플리케이션 코드에서 불필요한 전역 Lock을 걸어 성능을 저하시킬 필요가 없었습니다."
 * **A2 (클라이언트 스레드 방어)**:
   "클라이언트(`Tkinter`) 내부에서도 백그라운드 스레드는 오직 서버와의 HTTPS 통신만 담당하고, UI 위젯 데이터 변경은 `root.after()`를 통해 **메인 스레드의 이벤트 큐로 작업을 위임(Message Passing)**하기 때문에 두 스레드가 동시에 같은 위젯 메모리를 수정하는 경쟁 상태 자체가 발생하지 않습니다."
 
@@ -124,7 +124,7 @@ sequenceDiagram
     autonumber
     participant K as 🖥️ 키오스크 1·2<br/>(kiosk_client1/2.py)
     participant S as 🔒 FastAPI 중앙 서버<br/>(server.py - HTTPS/API Key)
-    participant DB as 🗄️ MySQL DB<br/>(orders / order_items)
+    participant DB as 🗄️ SQLite3 DB<br/>(kiosk.db - orders / order_items)
     participant KT as 👨‍🍳 주방 화면<br/>(kitchen_client.py)
     participant APP as 📱 고객용 가상 모바일 폰<br/>(app_client.py)
 
@@ -163,7 +163,7 @@ sequenceDiagram
     end
 ```
 
-### 3.2 MySQL 데이터베이스 테이블 구조 (4개 테이블)
+### 3.2 SQLite3 데이터베이스 테이블 구조 (4개 테이블)
 1. **`stores`**: `store_id` (PK), `store_name`, `device_ip`
 2. **`menus`**: `menu_id` (PK), `store_id` (FK), `category`, `menu_name`, `price`
 3. **`orders`**: `order_id` (PK), `store_id` (FK), `order_type`, `spoon_needed`, `total_price`, `status` (`PENDING` / `COOKING` / `COMPLETED`), `notified_accepted`, `notified_completed`, `order_time`
@@ -175,7 +175,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    W1["1주차<br/>MySQL 스키마 및<br/>HTTPS/API Key 설계"] --> W2["2주차<br/>FastAPI 중앙 서버<br/>(server.py) 구축"]
+    W1["1주차<br/>SQLite3 스키마 및<br/>HTTPS/API Key 설계"] --> W2["2주차<br/>FastAPI 중앙 서버<br/>(server.py) 구축"]
     W2 --> W3["3주차<br/>보다수 커피 키오스크<br/>(kiosk_client1.py)"]
     W3 --> W4["4주차<br/>김밥천국 키오스크<br/>(kiosk_client2.py)"]
     W4 --> W5["5주차<br/>주방 화면 & 가상 모바일 폰<br/>(폴링 연동 구현)"]
@@ -184,7 +184,7 @@ flowchart LR
 
 | 주차 | 핵심 목표 | 담당 및 세부 작업 내용 | 산출물 |
 | :---: | :--- | :--- | :--- |
-| **1주차** | **요구사항 분석, DB 구축 및 SSL/보안 설계** | • **[공통]** API 명세 및 JSON 페이로드 규격 확정<br/>• **[팀원 1]** `generate_cert.py`로 SSL 인증서(`cert.pem`, `key.pem`) 발급 및 `database.py` (4개 테이블 + 23종 초기 메뉴 시드) 구현<br/>• **[팀원 2·3]** Tkinter 클라이언트 4종 화면 레이아웃 설계 | `generate_cert.py`<br/>`database.py`<br/>`PLAN.md` |
+| **1주차** | **요구사항 분석, DB 구축 및 SSL/보안 설계** | • **[공통]** API 명세 및 JSON 페이로드 규격 확정<br/>• **[팀원 1]** `generate_cert.py`로 SSL 인증서(`cert.pem`, `key.pem`) 발급 및 `database.py` (SQLite3 4개 테이블 + 23종 초기 메뉴 시드) 구현<br/>• **[팀원 2·3]** Tkinter 클라이언트 4종 화면 레이아웃 설계 | `generate_cert.py`<br/>`database.py`<br/>`PLAN.md` |
 | **2주차** | **FastAPI 중앙 서버 (`server.py`) 개발** | • **[팀원 1]** FastAPI `Security(APIKeyHeader)` 기반 `access_token` 인증 및 HTTPS 적용, 핵심 REST API 6종 구현<br/>• **[팀원 2·3]** 클라이언트 공통 HTTPS 통신 헬퍼 모듈 및 스레드 연동 구조 테스트 | `server.py` |
 | **3주차** | **보다수 커피 키오스크 (`kiosk_client1.py`) 개발** | • **[팀원 2]** 보다수 커피 12종 메뉴 탭, `HOT`/`ICE` 선택, 매장/포장, 수저 옵션, 장바구니 UI 및 백그라운드 결제 스레드(`POST /order`) 구현 | `kiosk_client1.py` |
 | **4주차** | **김밥천국 키오스크 (`kiosk_client2.py`) 개발** | • **[팀원 2]** 김밥천국 11종 메뉴 탭, 김밥 전용 `당근 제외`/`오이 제외` 체크박스 옵션, 장바구니 UI 및 백그라운드 결제 스레드 구현 | `kiosk_client2.py` |
