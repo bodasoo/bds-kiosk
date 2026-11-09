@@ -6,6 +6,22 @@
 
 import os
 
+# 프로젝트 기본 경로
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# .env 파일 자동 로드 (키값 노출 방지 및 환경변수 주입)
+ENV_FILE = os.path.join(BASE_DIR, ".env")
+if os.path.exists(ENV_FILE):
+    try:
+        with open(ENV_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, val = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), val.strip())
+    except Exception:
+        pass
+
 # ==========================================
 # 1. 중앙 서버 네트워크 및 HTTPS 설정
 # ==========================================
@@ -13,8 +29,7 @@ SERVER_HOST = os.getenv("BDS_SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.getenv("BDS_SERVER_PORT", "8443"))
 BASE_URL = f"https://{SERVER_HOST}:{SERVER_PORT}"
 
-# 프로젝트 기본 경로 및 SSL/TLS 인증서 파일 경로
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# SSL/TLS 인증서 파일 경로
 SSL_CERT_FILE = os.path.join(BASE_DIR, "cert.pem")
 SSL_KEY_FILE = os.path.join(BASE_DIR, "key.pem")
 
@@ -22,7 +37,8 @@ SSL_KEY_FILE = os.path.join(BASE_DIR, "key.pem")
 # 2. 클라이언트-서버 공유 API Key 인증 설정
 # ==========================================
 API_KEY_HEADER_NAME = "access_token"
-SHARED_API_KEY = os.getenv("BDS_API_KEY", "bds-kiosk-secret-token-2026")
+# 키값은 절대 코드에 하드코딩하지 않고 .env 및 환경변수(os.getenv)에서만 가져옵니다.
+SHARED_API_KEY = os.getenv("BDS_API_KEY", "")
 
 # 클라이언트가 HTTP 요청 시 기본으로 포함할 인증 헤더
 DEFAULT_HEADERS = {

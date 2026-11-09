@@ -165,7 +165,7 @@ flowchart TB
 * **도메인 특성 반영 (M2M, Machine-to-Machine)**:
   * 매장 키오스크와 주방 모니터는 일반 고객이 매번 아이디/비밀번호를 입력해 로그인하는 웹사이트가 아니라, **매장에 고정 설치된 인가 단말기**임.
 * **구현 방식**:
-  * 중앙 서버와 인가된 4대의 클라이언트가 공유 비밀키(`access_token: bds-kiosk-secret-token-2026`)를 보유.
+  * 중앙 서버와 인가된 4대의 클라이언트가 `.env` 환경변수로 주입된 공유 비밀키(`access_token`)를 보유.
   * FastAPI의 `Security(APIKeyHeader(name="access_token"))` 의존성 주입을 통해 모든 API 호출 시 헤더를 검증하며, 키가 없거나 불일치할 경우 즉시 **`HTTP 403 Forbidden`**으로 외부 불법 접근을 100% 차단함.
 
 #### 2. 왜 **HTTPS (SSL/TLS) 통신 구간 암호화**를 결합했는가?

@@ -10,6 +10,13 @@ env/
 
 # Environment variables
 .env
+.env*
+*.env
+
+# SSL/TLS Certificates and Private Keys (보안 인증서 및 비밀키 노출 방지)
+*.pem
+cert.pem
+key.pem
 
 # IDE settings
 .vscode/
