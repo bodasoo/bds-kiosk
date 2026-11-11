@@ -1,4 +1,5 @@
 from typing import List
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from .security import verify_api_key
 from kiosk.storage.orders import create_order_transaction
@@ -27,5 +28,6 @@ def create_order(order_req: OrderCreateRequest):
         )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"주문 저장 오류: {exc}")
+    except Exception:
+        logging.exception('주문 저장 실패')
+        raise HTTPException(status_code=500, detail='주문을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.')

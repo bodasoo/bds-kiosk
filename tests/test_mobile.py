@@ -83,6 +83,36 @@ class MobileTests(unittest.TestCase):
         subscription['keys']['auth'] = 'bad'
         self.assertEqual(self.client.post('/api/mobile/push/subscriptions', headers=self.headers, json=subscription).status_code, 400)
 
+    def test_active_order_cap_keeps_idempotent_retries_working(self):
+        first = self.order()
+        first_request = self.payload['request_id']
+        for _ in range(2):
+            self.payload['request_id'] = str(uuid4())
+            self.order()
+        self.payload['request_id'] = str(uuid4())
+        self.assertEqual(self.client.post('/api/mobile/orders', headers=self.headers, json=self.payload).status_code, 400)
+        self.payload['request_id'] = first_request
+        self.assertEqual(self.order(), first)
+
+    def test_ip_limit_cannot_be_bypassed_by_rotating_customer_tokens(self):
+        for _ in range(20):
+            response = self.client.post('/api/mobile/orders', headers={'X-Customer-Token':secrets.token_urlsafe(32)}, json={**self.payload, 'request_id':str(uuid4())})
+            self.assertEqual(response.status_code, 200)
+        response = self.client.post('/api/mobile/orders', headers={'X-Customer-Token':secrets.token_urlsafe(32), 'X-Forwarded-For':'192.0.2.9'}, json={**self.payload, 'request_id':str(uuid4())})
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.headers['Retry-After'], '60')
+        with patch('kiosk.api.mobile.time.monotonic', return_value=10**12):
+            self.assertEqual(self.client.post('/api/mobile/orders', headers=self.headers, json=self.payload).status_code, 200)
+
+    def test_subscription_limit_allows_existing_subscription_refresh(self):
+        subscription = self.subscription()
+        for i in range(3):
+            subscription['endpoint'] = f'https://web.push.apple.com/test-{i}'
+            self.assertEqual(self.client.post('/api/mobile/push/subscriptions', headers=self.headers, json=subscription).status_code, 200)
+        self.assertEqual(self.client.post('/api/mobile/push/subscriptions', headers=self.headers, json=subscription).status_code, 200)
+        subscription['endpoint'] = 'https://web.push.apple.com/test-extra'
+        self.assertEqual(self.client.post('/api/mobile/push/subscriptions', headers=self.headers, json=subscription).status_code, 400)
+
     def test_push_failure_retries_and_expired_subscription_is_removed(self):
         from pywebpush import WebPushException
         subscription = self.subscription()

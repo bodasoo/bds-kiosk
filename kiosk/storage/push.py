@@ -32,6 +32,11 @@ def save_subscription(customer_hash, subscription):
         existing = conn.execute('SELECT customer_hash FROM push_subscriptions WHERE endpoint=?', (endpoint,)).fetchone()
         if existing and existing['customer_hash'] != customer_hash:
             raise ValueError('이 알림 구독은 다른 주문 세션에 연결되어 있습니다. 알림을 다시 등록해주세요.')
+        if not existing:
+            count = conn.execute('SELECT COUNT(*) FROM push_subscriptions WHERE customer_hash=?', (customer_hash,)).fetchone()[0]
+            total = conn.execute('SELECT COUNT(*) FROM push_subscriptions').fetchone()[0]
+            if count >= 3 or total >= 300:
+                raise ValueError('알림 등록 한도에 도달했습니다. 기존 구독을 해제한 뒤 다시 시도해주세요.')
         conn.execute('''INSERT INTO push_subscriptions VALUES (?, ?, ?, ?)
             ON CONFLICT(endpoint) DO UPDATE SET subscription_json=excluded.subscription_json''',
             (endpoint, customer_hash, json.dumps(subscription), time.time()))

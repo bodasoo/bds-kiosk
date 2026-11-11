@@ -39,6 +39,7 @@ BASE_URL = os.getenv('BDS_BASE_URL', f"https://{'127.0.0.1' if SERVER_HOST == '0
 # SSL/TLS 인증서 파일 경로
 SSL_CERT_FILE = os.getenv('BDS_SSL_CERT', os.path.join(BASE_DIR, "cert.pem"))
 SSL_KEY_FILE = os.getenv('BDS_SSL_KEY', os.path.join(BASE_DIR, "key.pem"))
+SSL_CA_FILE = os.getenv('BDS_SSL_CA', SSL_CERT_FILE)
 
 # ==========================================
 # 2. 클라이언트-서버 공유 API Key 인증 설정

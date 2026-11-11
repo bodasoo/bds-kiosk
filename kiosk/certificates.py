@@ -15,9 +15,9 @@ from cryptography.x509.oid import NameOID
 from kiosk.config import SSL_CERT_FILE, SSL_KEY_FILE
 
 
-def generate_self_signed_cert(cert_path: str = SSL_CERT_FILE, key_path: str = SSL_KEY_FILE) -> None:
+def generate_self_signed_cert(cert_path: str = SSL_CERT_FILE, key_path: str = SSL_KEY_FILE, *, force=False) -> None:
     """RSA 2048비트 개인키 및 자체 서명 X.509 SSL 인증서(cert.pem, key.pem) 생성"""
-    if os.path.exists(cert_path) and os.path.exists(key_path):
+    if not force and os.path.exists(cert_path) and os.path.exists(key_path):
         print(f"[SSL] 기존 인증서 파일이 존재합니다: {cert_path}, {key_path}")
         return
 
@@ -50,6 +50,8 @@ def generate_self_signed_cert(cert_path: str = SSL_CERT_FILE, key_path: str = SS
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - datetime.timedelta(minutes=5))
         .not_valid_after(now + datetime.timedelta(days=365))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()), critical=False)
         .add_extension(
             x509.SubjectAlternativeName(
                 [

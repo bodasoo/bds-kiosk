@@ -19,6 +19,8 @@ app = FastAPI(
 def on_startup() -> None:
     """서버 시작 시 SQLite DB 및 23종 초기 메뉴 자동 초기화"""
     init_db()
+    with mobile._write_lock:
+        mobile._write_times.clear()
     app.state.push_stop, app.state.push_thread = start_push_worker()
 
 

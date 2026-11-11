@@ -23,6 +23,13 @@ def create_order_transaction(order_data: Dict[str, Any], *, source='KIOSK', cust
                 return dict(order_id=previous['order_id'], order_number=order_number(previous['order_id'], previous['order_source']),
                             order_source=previous['order_source'], store_id=previous['store_id'],
                             store_name=store['store_name'], total_price=previous['total_price'])
+        if source == 'APP':
+            active = conn.execute("SELECT COUNT(*) FROM orders WHERE customer_hash=? AND status IN ('PENDING','COOKING')", (customer_hash,)).fetchone()[0]
+            if active >= 3:
+                raise ValueError('진행 중인 주문은 기기당 최대 3건입니다. 기존 주문 완료 후 다시 주문해주세요.')
+            total_active = conn.execute("SELECT COUNT(*) FROM orders WHERE order_source='APP' AND status IN ('PENDING','COOKING')").fetchone()[0]
+            if total_active >= 200:
+                raise ValueError('매장 주문이 많습니다. 잠시 후 다시 주문해주세요.')
         store = conn.execute('SELECT * FROM stores WHERE store_id=?', (order_data['store_id'],)).fetchone()
         if not store:
             raise ValueError('매장을 찾을 수 없습니다.')
