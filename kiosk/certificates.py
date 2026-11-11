@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
-from config import SSL_CERT_FILE, SSL_KEY_FILE
+from kiosk.config import SSL_CERT_FILE, SSL_KEY_FILE
 
 
 def generate_self_signed_cert(cert_path: str = SSL_CERT_FILE, key_path: str = SSL_KEY_FILE) -> None:
@@ -81,4 +81,3 @@ def generate_self_signed_cert(cert_path: str = SSL_CERT_FILE, key_path: str = SS
 
 if __name__ == "__main__":
     generate_self_signed_cert()
-

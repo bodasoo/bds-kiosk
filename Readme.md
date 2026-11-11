@@ -1,127 +1,92 @@
-# 🛒 멀티 클라이언트 키오스크 및 주방/고객 연동 시스템
+# 보다수 키오스크
 
-본 프로젝트는 **FastAPI** 중앙 서버와 **SQLite (`sqlite3`)** 데이터베이스를 기반으로, 여러 대의 독립된 키오스크와 주방 화면, 그리고 **고객용 가상 모바일 폰**이 실시간으로 연동되는 통합 주문 및 매장 관리 시스템입니다.
+커피·김밥 키오스크, 주방 종합창과 HTTPS 중앙 서버를 기능별 모듈로 구성한 Python 프로젝트입니다. 화면은 Tkinter 기반 CustomTkinter를 사용합니다.
 
----
+## 실행
 
-## 🛠️ 1. 기술 스택 (Tech Stack)
+**아이폰 로컬 시연:** `start-mobile.bat`을 실행하세요. PC와 아이폰을 같은 와이파이에 연결하고, 표시되는 준비 페이지에서 인증서 설치 → 홈 화면 추가 → 알림 허용을 진행합니다. [아이폰 시연 안내](docs/MOBILE_DEMO.md)에 전체 절차가 있습니다. 앱 주문은 `A001`처럼 표시되고 기존 주방 종합창에서 처리됩니다. 결제 없는 PWA 시연이며, 실제 푸시는 인터넷 연결이 필요합니다.
 
-| 구분 | 사용 기술 및 라이브러리 |
-| :--- | :--- |
-| **Backend Server** | Python 3.x, FastAPI, Uvicorn |
-| **Database** | SQLite3 (`sqlite3` 내장 RDBMS, WAL 모드 적용) |
-| **GUI Clients** | Python `Tkinter` (내장 GUI 라이브러리) |
-| **Communication & Protocol** | HTTPS REST API (`requests`), Background Polling (1~2초 간격) |
-| **Security & Authentication** | 1) **HTTPS (SSL/TLS)** 통신 구간 암호화 (`cert.pem`, `key.pem`)<br/>2) **API 키(API Key)** 기반 클라이언트 인증 헤더 (`access_token`) |
+Windows에서는 **`start.bat`을 더블클릭**하세요. 프로젝트 가상환경을 사용하며, 필요한 패키지가 없으면 최초 설치합니다. 실행창에서 **보다수 커피 / 김밥천국 / 주방 종합창**을 선택합니다. 이미 실행 중인 서버가 있으면 연결해서 사용합니다.
 
----
+관리자 로그인 초기 비밀번호는 **`1234`**입니다. 운영 센터 하단의 **관리자 비밀번호 변경**에서 현재 비밀번호와 새 비밀번호를 입력해 변경합니다. 새 비밀번호는 8~128자이며, 확인 입력이 일치해야 합니다.
 
-## 🏗️ 2. 시스템 아키텍처 및 구성
+프로젝트 루트의 `.env.admin`에는 무작위 솔트와 scrypt 해시만 저장하며, Git에 포함하지 않습니다. 파일이 처음 없을 때만 초기 설정을 생성합니다. 손상된 파일은 초기 비밀번호로 자동 복구하지 않습니다. 운영 센터와 주방 화면 실행 시 로그인하며, 주방은 독립 프로세스이므로 별도로 로그인합니다. 커피·김밥 고객 화면에는 관리자 비밀번호를 요구하지 않습니다.
 
-시스템은 하나의 중앙 서버와 4개의 독립된 `Tkinter` 클라이언트 프로그램으로 구성됩니다.
+이 인증은 로컬 관리자 화면 접근용입니다. 서버 REST API는 기존 API Key 인증을 사용하며 관리자 로그인 세션과 연동되지 않습니다. `.env.admin` 파일과 소스코드의 접근 권한은 운영체제 계정으로 관리해야 합니다.
 
-1. **중앙 서버 (`server.py`):** FastAPI 기반 백엔드, HTTPS(SSL/TLS) 및 API Key 인증 적용, SQLite DB(`kiosk.db`)와 연동하여 주문 접수 및 상태 관리
-2. **보다수 커피 키오스크 (`kiosk_client1.py`):** 음료 메뉴(`HOT`/`ICE` 선택, 포장/매장식사, 수저 옵션) 주문 기기
-3. **김밥천국 키오스크 (`kiosk_client2.py`):** 김밥 및 식사 메뉴(`당근`/`오이` 제외, 포장/매장식사, 수저 옵션) 주문 기기
-4. **주방 화면 (`kitchen_client.py`):** 신규 주문 폴링 조회, **[주문 접수]** 및 **[조리 완료]** 처리
-5. **고객용 가상 모바일 폰 (`app_client.py`):** 스마트폰 형태의 UI를 띄워 주문 상태 변경(*조리 시작 안내*) 및 *조리 완료 픽업 알림*을 실시간 문자/알림톡 형태로 폴링 수신
-
----
-
-## ☕ 3. 매장별 메뉴 및 옵션 구성
-
-### 1) 보다수 커피 (`KIOSK_01` - `kiosk_client1.py`)
-* **공통 옵션**: 매장 식사 / 포장 (To-go) | 수저 필요 여부
-* **음료별 옵션**: `HOT` / `ICE` 선택 가능
-* **메뉴 구성 (12종)**:
-  * **커피**: 아메리카노(3,000원), 카페라떼(3,500원), 바닐라라떼(4,000원), 헤이즐럿라떼(4,000원), 돌체라떼(4,500원)
-  * **스무디**: 플레인 요거트 스무디(4,500원), 딸기 요거트 스무디(4,800원)
-  * **차/기타**: 아이스티(3,000원), 레몬차(4,000원), 자몽차(4,000원), 유자차(4,000원), 쌍화탕(4,500원)
-
-### 2) 김밥천국 (`KIOSK_02` - `kiosk_client2.py`)
-* **공통 옵션**: 매장 식사 / 포장 (To-go) | 수저 필요 여부
-* **김밥류 전용 옵션**: `당근 제외` / `오이 제외` 선택 가능
-* **메뉴 구성 (11종)**:
-  * **김밥류**: 기본 김밥(3,000원), 참치김밥(4,000원), 치즈김밥(4,000원), 돈가스 김밥(4,500원), 야채 김밥(3,500원), 땡초김밥(4,000원), 제육김밥(4,500원)
-  * **식사/분식류**: 돈가스(8,000원), 라면(4,000원), 우동(5,000원), 떡볶이(4,500원)
-
----
-
-## 🔄 4. 핵심 동작 시나리오
-
-### [1단계] 주문하기 (키오스크 $\rightarrow$ 중앙 서버 $\rightarrow$ DB)
-* **주체:** 키오스크 (보다수 커피 또는 김밥천국)
-* **동작:** 손님이 메뉴와 옵션을 선택하고 모의 결제 버튼을 누름.
-* **통신:** 키오스크가 백그라운드 스레드를 통해 FastAPI 서버로 HTTPS 주문 요청 전송 (`POST /order`, `access_token` API 키 헤더 포함).
-* **결과:** 중앙 서버가 API 키 검증 후 SQLite 데이터베이스(`kiosk.db`의 `orders`, `order_items`)에 안전하게 저장(초기 상태: `PENDING`).
-
-### [2단계] 주방에서 확인 및 접수 (주방 화면 $\leftrightarrow$ 중앙 서버 $\leftrightarrow$ 고객용 가상 모바일 폰)
-* **주체:** 주방 화면 (`kitchen_client.py`)
-* **동작:** 주방 화면이 켜져 있는 동안 백그라운드 스레드에서 **1~2초 간격으로 폴링(Polling)** 요청 (`GET /orders/pending`, *"새 주문이 있나요?"*).
-* **결과:** 중앙 서버가 미접수된 주문 내역을 주방 화면에 전달.
-* **접수 처리:** 주방 직원이 **[주문 접수]** 버튼을 누르면, 주방 화면이 서버로 상태 변경 요청(`PATCH /orders/{order_id}/accept`)을 보냄 (`COOKING` 상태로 변경). **고객용 가상 모바일 폰** 또한 폴링을 통해 이를 감지하고 스마트폰 화면에 *"고객님의 주문이 접수되어 조리 시작되었습니다"* 알림 배너/메시지 표시.
-
-### [3단계] 조리 완료 및 알림 받기 (고객용 가상 모바일 폰 $\leftrightarrow$ 중앙 서버)
-* **주체:** 주방 화면 (`kitchen_client.py`) 및 고객용 가상 모바일 폰 (`app_client.py`)
-* **조리 완료:** 주방 직원이 요리가 끝나고 **[조리 완료]** 버튼을 누르면(`PATCH /orders/{order_id}/complete`), 서버 DB에 해당 주문 상태가 `COMPLETED`로 변경되고 알림 데이터 생성.
-* **폴링 통신:** 고객용 가상 모바일 폰이 백그라운드 스레드에서 **1~2초 간격**으로 서버에 확인 (`GET /orders/{order_id}/status`, *"내 번호로 온 알림이 있니?"*).
-* **결과:** 중앙 서버가 조리 완료 데이터를 전송하고, **고객용 가상 모바일 폰** 화면에 픽업 알림 메시지/팝업 출력.
-
----
-
-## 🧵 5. 멀티스레딩(Multi-threading) 적용 위치
-
-* **키오스크 (`kiosk_client1.py`, `kiosk_client2.py`):** 결제 버튼을 누르고 서버와 HTTPS 통신할 때 메인 화면(UI)이 멈추는(렉) 현상을 방지하기 위해 백그라운드 스레드 사용.
-* **주방 화면 (`kitchen_client.py`):** 1~2초 간격으로 서버에 신규 주문을 조회(폴링)하기 위한 백그라운드 반복 스레드 구동.
-* **고객용 가상 모바일 폰 (`app_client.py`):** 1~2초 간격으로 주문 상태 변화 및 조리 완료 알림을 조회(폴링)하기 위한 백그라운드 반복 스레드 구동.
-* *참고:* UI 조작은 `Tkinter` 메인 스레드 안전 규칙(`root.after()` 등)을 준수하며, 데이터 동기화는 중앙 SQLite 데이터베이스(WAL 모드 및 ACID 트랜잭션)를 거치므로 복잡한 스레드 락(Lock) 구현 없이 안전하게 처리됩니다.
-
----
-
-## 🔒 6. 보안 및 인증 설계
-
-1. **HTTPS (SSL/TLS) 통신 구간 암호화:**
-   * 자체 서명 SSL 인증서(`cert.pem`, `key.pem`)를 생성하여 Uvicorn 서버에 적용합니다.
-   * 클라이언트와 중앙 서버 간 전송되는 모든 HTTP 헤더(`access_token`) 및 주문 데이터(JSON 페이로드)를 SSL/TLS로 암호화하여 패킷 스니핑 및 중간자 공격(MITM)을 방지합니다.
-2. **API 키 기반 클라이언트 인증:**
-   * 인가된 클라이언트(키오스크 1·2, 주방 화면, 고객용 가상 모바일 폰)와 중앙 서버 간에 공유된 비밀 API 키를 사용합니다.
-   * 서버로 요청을 보낼 때 HTTP 헤더(`access_token`)에 API 키를 담아 전송하며, 서버는 FastAPI의 `Security`(`APIKeyHeader`) 기능을 통해 이를 검증하여 유효한 기기의 요청만 허용하고 외부 접근을 안전하게 차단합니다.
-
----
-
-## 🗄️ 7. 데이터베이스 테이블 구조 (SQLite Schema)
-
-* `stores`: 매장/키오스크 기기 정보 (`store_id`, `store_name`, `device_ip`)
-* `menus`: 메뉴 정보 (`menu_id`, `store_id`, `category`, `menu_name`, `price`)
-* `orders`: 주문 마스터 및 상태 정보 (`order_id`, `store_id`, `order_type`, `spoon_needed`, `total_price`, `status`, `notified_accepted`, `notified_completed`, `order_time`)
-* `order_items`: 주문 세부 옵션 정보 (`item_id`, `order_id`, `menu_id`, `quantity`, `temperature`, `exclude_carrot`, `exclude_cucumber`)
-
----
-
-## 🚀 8. 실행 방법 (Quick Start)
-
-### 1단계: 필요 라이브러리 설치
-```bash
-pip install -r requirements.txt
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe app.py
 ```
 
-### 2단계: SSL 인증서 생성 및 중앙 서버 실행
-```bash
-python generate_cert.py
-python server.py
+가상환경이 활성화되어 있다면 `python app.py`로 실행합니다.
+실행창이 서버를 자동으로 시작하며, 서버 준비 후 **보다수 커피 / 김밥천국** 버튼으로 매장 화면을 엽니다.
+실행창을 닫으면 해당 실행창에서 시작한 서버와 매장 화면을 함께 종료합니다.
+다른 실행창에서 시작한 서버는 종료하지 않습니다. 실행 오류는 `logs/server.log`에 기록됩니다.
+
+서버나 매장 화면만 실행할 수도 있습니다. 매장 단독 실행 시 서버가 먼저 실행 중이어야 합니다.
+
+```powershell
+python app.py --mode server
+python app.py --mode coffee
+python app.py --mode gimbap
+python app.py --mode kitchen
 ```
 
-### 3단계: 4개 클라이언트 실행 (개별 터미널 창)
-```bash
-# 1. 보다수 커피 키오스크 실행
-python kiosk_client1.py
+## 구조
 
-# 2. 김밥천국 키오스크 실행
-python kiosk_client2.py
-
-# 3. 주방 화면 실행
-python kitchen_client.py
-
-# 4. 고객용 가상 모바일 폰 실행
-python app_client.py
+```text
+app.py                    # 모든 실행 모드의 진입점
+kiosk/
+  launcher.py             # 통합 실행창, 서버 준비 확인, 자식 프로세스 종료
+  server.py               # FastAPI 앱과 HTTPS 서버 실행
+  config.py               # 네트워크·API Key·파일 경로 설정
+  certificates.py         # 자체 서명 인증서 생성
+  schemas.py              # API 요청·응답 규격
+  api/
+    security.py           # 공통 API Key 인증
+    menus.py              # 메뉴 조회
+    orders.py             # 주문 생성
+    kitchen.py            # 주방 주문 조회·접수·완료
+    notifications.py      # 고객 알림 조회
+  storage/
+    connection.py         # SQLite 연결, WAL·외래키 설정
+    setup.py              # 테이블 생성과 초기 데이터 적재
+    seed.py               # 매장·메뉴 초기 데이터
+    menus.py              # 메뉴 조회 SQL
+    orders.py             # 주문 트랜잭션과 상태 관리 SQL
+    notifications.py      # 알림 조회와 수신 상태 SQL
+  clients/
+    api.py                # 클라이언트 HTTP 통신·인증 헤더·타임아웃
+    ui.py                 # 공통 색상·폰트·버튼·창·메뉴 일러스트
+    cart.py               # UI에 의존하지 않는 장바구니 규칙·주문 데이터 구성
+    base.py               # 고객 메뉴·옵션·장바구니·주문 확인·접수번호 화면
+    coffee.py             # 커피 매장 설정
+    gimbap.py             # 김밥 매장 설정
+    kitchen.py            # 주방 카드 보드·매장 필터·접수·조리 완료
+examples/
+  mega_kiosk.py           # 기존 CustomTkinter 디자인 실험 (통합 앱과 별개)
+docs/                     # 기존 기획·발표 자료와 이전 README
+tests/                   # 임시 DB 주문 흐름·공통 클라이언트 검증
 ```
+
+`kiosk.db`, `cert.pem`, `key.pem`은 기존 프로젝트 루트 경로를 그대로 사용합니다.
+환경변수 `BDS_SERVER_HOST`, `BDS_SERVER_PORT`, `BDS_API_KEY`도 유지합니다.
+
+고객 화면은 메뉴 선택 → 옵션 선택 → 주문 확인 → 접수번호 순서로 진행합니다. 주방 종합창은 두 매장의 접수 대기·조리 중 주문을 1.5초 간격으로 조회하고, 접수·완료를 처리합니다. `F11`로 전체화면, `Esc`로 전체화면을 해제합니다.
+
+실제 결제 단말기와 영수증 프린터는 연동하지 않습니다. 고객 모바일 알림은 REST API만 제공하며, 별도 모바일 GUI는 아직 없습니다.
+API 문서는 기본 `https://127.0.0.1:8443/docs`에서 확인합니다. 자체 서명 인증서이므로 브라우저에서 인증서 확인이 필요할 수 있습니다.
+
+`docs/`의 기존 문서는 개편 이전 파일명을 포함하는 당시 자료입니다. 현재 실행 방법과 파일 위치는 이 README를 기준으로 합니다.
+API·UI·DB별 변경 위치와 의존 관계는 [유지보수 안내](docs/MAINTENANCE.md)를 확인하세요.
+
+## 검증
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m unittest discover -s tests -v
+```
+
+테스트는 임시 DB를 사용합니다. 두 매장 메뉴 수, 인증, 매장별 옵션, 주문 금액, 주문 접수·완료, 알림 중복 수신 방지, 실패 시 롤백과 공통 장바구니·전송 데이터를 검증합니다.

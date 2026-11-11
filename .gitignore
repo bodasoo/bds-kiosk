@@ -10,6 +10,12 @@ env/
 
 # Environment variables
 .env
+.env*
+*.env
+*.pem
+*.db
+.env.admin
+.env.admin.*.tmp
 
 # IDE settings
 .vscode/
@@ -18,4 +24,8 @@ env/
 # SQLite WAL/SHM temporary files
 *.db-shm
 *.db-wal
+
+# Local server output
+logs/
+.local/
 
