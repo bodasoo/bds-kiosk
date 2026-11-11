@@ -41,6 +41,8 @@ class OrderCreateResponse(BaseModel):
     """주문 생성 완료 응답 스키마"""
     status: str = "OK"
     order_id: int
+    order_number: str
+    order_source: str
     store_id: str
     store_name: str
     total_price: int
@@ -61,6 +63,8 @@ class KitchenOrderItemDetail(BaseModel):
 class KitchenOrderResponse(BaseModel):
     """[2단계] 주방 화면 폴링 조회 응답 (GET /orders/kitchen)"""
     order_id: int
+    order_number: str
+    order_source: str
     store_id: str
     store_name: str
     order_type: str
@@ -91,4 +95,3 @@ class MobileNotificationItem(BaseModel):
     summary_text: str
     message: str
     order_time: str
-

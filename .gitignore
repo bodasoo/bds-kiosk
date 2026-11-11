@@ -12,9 +12,10 @@ env/
 .env
 .env*
 *.env
-
-# SSL/TLS Certificates and Private Keys (보안 인증서 및 비밀키 노출 방지)
 *.pem
+*.db
+.env.admin
+.env.admin.*.tmp
 cert.pem
 key.pem
 
@@ -25,4 +26,8 @@ key.pem
 # SQLite WAL/SHM temporary files
 *.db-shm
 *.db-wal
+
+# Local server output
+logs/
+.local/
 

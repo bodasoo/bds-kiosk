@@ -3,3 +3,5 @@ uvicorn>=0.29.0
 requests>=2.31.0
 cryptography>=42.0.0
 pydantic>=2.6.0
+customtkinter>=5.2,<7
+pywebpush>=2,<3

@@ -226,4 +226,3 @@ flowchart TB
   1. 4개 정규화 테이블(`stores`, `menus`, `orders`, `order_items`) 스키마 및 트랜잭션 설계 프롬프트
   2. 스레드 동기화(`threading.Lock`) 미사용 근거(DB 트랜잭션 위임 및 `root.after` 이벤트 큐 분리) 아키텍처 검증 프롬프트
   3. FastAPI `access_token` 헤더 인증 및 자체 서명 SSL 인증서(`cert.pem`, `key.pem`) 생성 코드 구현 프롬프트
-
