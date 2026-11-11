@@ -90,4 +90,3 @@ API 테스트는 임시 DB를 사용합니다. `tests/gui_smoke.py`는 실제 �
 # 모바일 픽업 앱
 
 모바일 UI는 `mobile/`, API는 `kiosk/api/mobile.py`, 데이터 처리는 `kiosk/storage/`에서 관리합니다. 주문 저장 로직은 Tkinter 키오스크와 모바일이 공유합니다. 푸시 네트워크 발송은 `kiosk/push.py`의 별도 작업 스레드가 담당합니다. 파일별 역할과 로컬 아이폰 설치 절차는 [MOBILE_DEMO.md](MOBILE_DEMO.md)를 참고하세요.
-

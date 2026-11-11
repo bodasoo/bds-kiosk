@@ -16,6 +16,8 @@ env/
 *.db
 .env.admin
 .env.admin.*.tmp
+cert.pem
+key.pem
 
 # IDE settings
 .vscode/

@@ -14,6 +14,8 @@ Windows에서는 **`start.bat`을 더블클릭**하세요. 프로젝트 가상�
 
 이 인증은 로컬 관리자 화면 접근용입니다. 서버 REST API는 기존 API Key 인증을 사용하며 관리자 로그인 세션과 연동되지 않습니다. `.env.admin` 파일과 소스코드의 접근 권한은 운영체제 계정으로 관리해야 합니다.
 
+공유 API 키는 프로젝트 루트 `.env`의 `BDS_API_KEY`로 관리합니다. 환경변수와 `.env`가 모두 없는 최초 실행에서는 임의의 키를 생성해 `.env`에 저장합니다. 기존 `.env`를 사용하는 경우 `BDS_API_KEY`를 설정하세요. `.env`, 인증서 개인 키, 로컬 DB는 Git에서 제외합니다.
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
