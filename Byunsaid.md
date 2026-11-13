@@ -152,9 +152,9 @@
 
 | 담당자 | 담당 파트 | 주요 담당 파일 | 세부 역할 및 개발 내용 |
 | :---: | :--- | :--- | :--- |
-| **팀원 1** | **백엔드 중앙 서버 &<br/>SQLite3 DB / 보안 설계** | `server.py`<br/>`database.py`<br/>`generate_cert.py` | • SQLite3(`kiosk.db`) 4개 테이블(`stores`, `menus`, `orders`, `order_items`) 스키마 설계 및 초기 메뉴 23종 자동 Seeding<br/>• FastAPI 기반 주문/주방/알림 핵심 REST API 6종 구현<br/>• SSL/TLS 자체 서명 인증서(`cert.pem`, `key.pem`) 발급 및 `access_token` API Key 보안 인증 모듈 구현 |
-| **팀원 2** | **매장별 키오스크<br/>클라이언트 2종 개발** | `kiosk_client1.py`<br/>`kiosk_client2.py` | • **보다수 커피 키오스크(`kiosk_client1.py`)**: 카테고리 탭, 음료 `HOT`/`ICE` 선택, 장바구니 Tkinter GUI 구현<br/>• **김밥천국 키오스크(`kiosk_client2.py`)**: 김밥 전용 `당근 제외`/`오이 제외` 체크박스 옵션 및 식사류 UI 구현<br/>• 공통 옵션(매장/포장, 수저 여부) 및 UI 렉 방지를 위한 백그라운드 스레드 HTTPS `POST /order` 통신 구현 |
-| **팀원 3** | **주방 화면 & 고객용 가상 모바일 폰<br/>(실시간 폴링 연동)** | `kitchen_client.py`<br/>`app_client.py` | • **주방 화면(`kitchen_client.py`)**: 1~2초 주기 신규 주문 백그라운드 폴링 스레드 및 `[주문 접수]` / `[조리 완료]` 비동기 상태 변경 구현<br/>• **고객용 가상 모바일 폰(`app_client.py`)**: 스마트폰 프레임 형태의 Tkinter UI 및 1~2초 주기 상태 폴링 스레드로 조리 시작/픽업 완료 실시간 모바일 알림 구현<br/>• `root.after()` 기반 Tkinter 메인 스레드 안전 UI 업데이트 및 전체 통합 시나리오 테스트 주도 |
+| **강다영<br/>(팀원 1)** | **백엔드 (서버 & DB /<br/>보안 및 API 아키텍처)** | `server.py`<br/>`database.py`<br/>`generate_cert.py`<br/>`config.py` | • SQLite3(`kiosk.db`) 4개 테이블(`stores`, `menus`, `orders`, `order_items`) 스키마 설계 및 초기 메뉴 23종 자동 Seeding<br/>• FastAPI 기반 주문/주방/알림 핵심 REST API 6종 및 WebSocket 실시간 브로드캐스트 허브 구현<br/>• SSL/TLS 자체 서명 인증서(`cert.pem`, `key.pem`) 발급 및 `.env` 기반 API Key 보안 격리·인가 모듈 구현 |
+| **이수연<br/>(팀원 2)** | **프론트엔드<br/>(매장별 키오스크 2종 개발)** | `kiosk_client1.py`<br/>`kiosk_client2.py` | • **보다수 커피 키오스크(`kiosk_client1.py`)**: 카테고리 탭, 음료 `HOT`/`ICE` 선택, 장바구니 Tkinter GUI 구현<br/>• **김밥천국 키오스크(`kiosk_client2.py`)**: 김밥 전용 `당근 제외`/`오이 제외` 체크박스 옵션 및 식사류 UI 구현<br/>• 공통 옵션(매장/포장, 수저 여부) 및 UI 렉 방지를 위한 백그라운드 스레드 HTTPS `POST /order` 결제 통신 연동 |
+| **김보아<br/>(팀원 3)** | **통신·실시간 알림<br/>및 시스템 통합** | `kitchen_client.py`<br/>`app_client.py`<br/>`test_websocket.py` | • **주방 화면(`kitchen_client.py`)**: 실시간 신규 주문 WebSocket 수신 스레드 및 `[주문 접수]` / `[조리 완료]` 비동기 상태 변경 구현<br/>• **고객용 가상 모바일 폰(`app_client.py`)**: 스마트폰 프레임 형태의 Tkinter UI 및 WebSocket 실시간 알림 수신 스레드로 조리 시작/픽업 완료 실시간 모바일 알림 구현<br/>• `root.after()` 기반 Tkinter 메인 스레드 안전 UI 업데이트, WSS 통신 무결성 및 5개 프로세스 전체 통합 시나리오 테스트 주도 |
 
 ---
 

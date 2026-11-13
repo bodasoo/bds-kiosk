@@ -47,11 +47,18 @@ DEFAULT_HEADERS = {
 }
 
 # ==========================================
-# 3. 폴링(Polling) 주기 설정 (초 단위)
+# 3. WebSocket 양방향 통신 (WSS) 설정
 # ==========================================
-POLLING_INTERVAL_SEC = 1.5  # 주방 화면 및 고객용 가상 모바일 폰 폴링 간격 (1~2초)
+WS_BASE_URL = f"wss://{SERVER_HOST}:{SERVER_PORT}"
+WS_KITCHEN_ENDPOINT = f"{WS_BASE_URL}/ws/kitchen"
+WS_APP_ENDPOINT = f"{WS_BASE_URL}/ws/app"
 
 # ==========================================
-# 4. SQLite 데이터베이스 파일 경로 설정 (Python 기본 내장)
+# 4. 폴링(Polling) 주기 설정 (초 단위, 하위 호환용)
+# ==========================================
+POLLING_INTERVAL_SEC = 1.5  # 폴링 방식 클라이언트 연동용 주기
+
+# ==========================================
+# 5. SQLite 데이터베이스 파일 경로 설정 (Python 기본 내장)
 # ==========================================
 SQLITE_DB_PATH = os.path.join(BASE_DIR, "kiosk.db")
