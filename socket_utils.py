@@ -1,4 +1,5 @@
 """
+socket_utils.py
 [3주차 L4 TCP 소켓 개편] 순수 TCP 패킷 프레이밍 및 송수신 유틸리티 (socket_utils.py)
 - TCP(SOCK_STREAM)는 메시지 경계가 없는 바이트 스트림이므로,
   패킷 뭉침(Coalescing)과 쪼개짐(Fragmentation)을 방지하기 위해
@@ -24,16 +25,25 @@ from config import (
 # ==========================================
 # 프로토콜 액션(명령) 상수 정의
 # ==========================================
-ACTION_REGISTER = "REGISTER"                          # 클라이언트 유형 등록 (kiosk / kitchen)
+ACTION_REGISTER = "REGISTER"                          # 클라이언트 유형/역할 등록
+ACTION_REGISTER_CLIENT = "REGISTER_CLIENT"            # 클라이언트 등록 액션 별칭
 ACTION_GET_MENUS = "GET_MENUS"                        # 매장별 메뉴 목록 조회
 ACTION_CREATE_ORDER = "CREATE_ORDER"                  # 신규 주문 생성 및 결제 처리
 ACTION_GET_ORDERS = "GET_ORDERS"                      # 주방용 주문 목록 조회
-ACTION_UPDATE_ORDER_STATUS = "UPDATE_ORDER_STATUS"    # 주문 상태 변경 (PENDING -> PREPARING -> COMPLETED)
+ACTION_UPDATE_ORDER_STATUS = "UPDATE_ORDER_STATUS"    # 주문 상태 변경 (PENDING -> COOKING -> COMPLETED)
 ACTION_NEW_ORDER_BROADCAST = "NEW_ORDER_BROADCAST"    # 서버 -> 주방 실시간 신규 주문 브로드캐스트
 ACTION_ORDER_STATUS_BROADCAST = "ORDER_STATUS_BROADCAST"  # 서버 -> 클라이언트 주문 상태 변경 브로드캐스트
+ACTION_NOTIFICATION_PUSH = "NOTIFICATION_PUSH"        # 서버 -> 모바일 고객 실시간 푸시 알림
 ACTION_PING = "PING"                                  # 연결 상태 확인(Heartbeat)
 ACTION_PONG = "PONG"                                  # Heartbeat 응답
 ACTION_ERROR = "ERROR"                                # 오류 응답
+
+# ==========================================
+# 클라이언트 역할(Role) 상수 정의
+# ==========================================
+ROLE_MOBILE = "MOBILE"                                # 고객용 가상 모바일 폰
+ROLE_KIOSK = "KIOSK"                                  # 매장 주문 키오스크
+ROLE_KITCHEN = "KITCHEN"                              # 주방 디스플레이 시스템 (KDS)
 
 
 def pack_message(data: dict[str, Any]) -> bytes:
@@ -141,7 +151,7 @@ def send_request(
     timeout: float = SOCKET_TIMEOUT,
 ) -> dict[str, Any]:
     """
-    단발성 요청-응답 TCP 소켓 통신을 수행합니다. (주로 키오스크 백그라운드 스레드에서 사용)
+    단발성 요청-응답 TCP 소켓 통신을 수행합니다. (키오스크 주문 등에서 사용)
     연결 -> 패킷 송신 -> 응답 패킷 수신 -> 연결 종료까지 안전하게 처리합니다.
     """
     req = make_request(action=action, payload=payload, auth_token=auth_token)

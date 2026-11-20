@@ -1,8 +1,8 @@
 """
 [통합 실행 런처 - run_all.py]
-- 순수 L4 TCP 중앙 서버(server.py), 주방 화면(kitchen_client.py),
-  키오스크 2종(kiosk_client1.py, kiosk_client2.py)을 한 번에 비동기로 실행합니다.
-- 이미 중앙 서버(SERVER_PORT, 기본 9000)가 실행 중이면 중복 실행([Errno 10048])을 건너뛰고
+- 중앙 서버(server.py), 주방 화면(kitchen_client.py),
+  키오스크 2종(kiosk_client1.py, kiosk_client2.py), 가상 모바일 폰(mobile_client.py)을 한 번에 비동기로 실행합니다.
+- 이미 중앙 서버(SERVER_PORT)가 실행 중이면 중복 실행([Errno 10048])을 건너뛰고
   기존 서버에 맞춰 클라이언트 창들만 띄웁니다.
 """
 
@@ -15,21 +15,20 @@ from typing import List
 
 from config import BASE_DIR, SERVER_HOST, SERVER_PORT
 
+VENV_PYTHON = os.path.join(BASE_DIR, ".venv", "Scripts", "python.exe")
 PREFERRED_PYTHON_PATH = r"C:\Users\dayoung\OneDrive - 조선대학교\바탕 화면\python.exe"
 CLIENT_SCRIPTS: List[str] = [
     "kitchen_client.py",
     "kiosk_client1.py",
     "kiosk_client2.py",
+    "mobile_client.py",
 ]
 
 
 def resolve_python_executable() -> str:
-    """프로젝트 가상환경(.venv) 또는 현재 실행 중인 Python 인터프리터 경로를 반환합니다."""
-    venv_python = os.path.join(BASE_DIR, ".venv", "Scripts", "python.exe")
-    if os.path.exists(venv_python):
-        return venv_python
-    if sys.executable and os.path.exists(sys.executable):
-        return sys.executable
+    """프로젝트 패키지가 설치된 Python 인터프리터 경로를 반환합니다."""
+    if os.path.exists(VENV_PYTHON):
+        return VENV_PYTHON
     if os.path.exists(PREFERRED_PYTHON_PATH):
         return PREFERRED_PYTHON_PATH
     return sys.executable
@@ -120,4 +119,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
