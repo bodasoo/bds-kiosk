@@ -10,20 +10,18 @@
 """
 
 import os
+import queue
+import socket
 import threading
 import tkinter as tk
 from tkinter import messagebox
 import tkinter.font as tkfont
 from typing import Any, Dict, List
-import urllib3
 import uuid
-import requests
 
-from config import BASE_URL, DEFAULT_HEADERS
+from config import SERVER_HOST, SERVER_PORT, SHARED_API_KEY
 from database import create_order_transaction, fetch_menus_by_store, init_db
-
-# 로컬 자체 서명 SSL 인증서 경고 숨김
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from socket_utils import ACTION_CREATE_ORDER, ACTION_GET_MENUS, send_request
 
 STORE_ID = "KIOSK_01"
 STORE_NAME = "보다수 커피"        # 백엔드 서버 및 DB 정규 매장명 (절대 보존)
@@ -229,40 +227,39 @@ class MockPaymentProcessor:
         # 1. 가상 신용카드 즉시 승인 번호 생성
         approval_no = f"APPR-{uuid.uuid4().hex[:8].upper()}"
 
-        # 2. access_token 헤더 보강 (config.py 및 .env 환경변수에서만 참조)
-        token = DEFAULT_HEADERS.get("access_token") or os.getenv("BDS_API_KEY", "")
-        headers = dict(DEFAULT_HEADERS)
-        headers["access_token"] = token
+        # 2. 패킷 인증 토큰 보강 (config.py 및 .env 환경변수에서만 참조)
+        token = SHARED_API_KEY or os.getenv("BDS_API_KEY", "")
 
-        # 3. 백엔드 중앙 서버로 데이터 전송 (POST /order)
+        # 3. 순수 L4 TCP 소켓을 통해 중앙 서버로 주문 패킷 전송 (ACTION_CREATE_ORDER)
         try:
-            resp = requests.post(
-                f"{BASE_URL}/order",
-                json=payload,
-                headers=headers,
-                verify=False,
+            resp = send_request(
+                SERVER_HOST,
+                SERVER_PORT,
+                ACTION_CREATE_ORDER,
+                payload=payload,
+                auth_token=token,
                 timeout=5.0,
             )
-            if resp.status_code == 200:
-                data = resp.json()
+            if resp.get("success"):
+                data = resp.get("data") or {}
                 return {
                     "success": True,
                     "order_id": data.get("order_id"),
                     "total_price": data.get("total_price", 0),
                     "approval_no": approval_no,
-                    "message": data.get("message", "주문이 정상 접수되었습니다."),
+                    "message": resp.get("message", "주문이 정상 접수되었습니다."),
                 }
-            elif resp.status_code == 403:
+            elif resp.get("status_code") == 403:
                 return {
                     "success": False,
-                    "error": "보안 인증 실패 (403 Forbidden):\n인가되지 않은 클라이언트 접근입니다 (Invalid access_token).",
+                    "error": "보안 인증 실패 (403 Forbidden):\n인가되지 않은 클라이언트 접근입니다 (Invalid auth_token).",
                 }
             else:
                 return {
                     "success": False,
-                    "error": f"서버 응답 오류 ({resp.status_code}): {resp.text}",
+                    "error": f"서버 응답 오류 ({resp.get('status_code', 500)}): {resp.get('message', '')}",
                 }
-        except requests.exceptions.ConnectionError:
+        except (ConnectionError, OSError, TimeoutError):
             # 중앙 서버(server.py) 미실행 시 단독 데모 모드로 로컬 SQLite DB 트랜잭션 폴백 처리
             try:
                 init_db()
@@ -282,7 +279,7 @@ class MockPaymentProcessor:
         except Exception as exc:
             return {
                 "success": False,
-                "error": f"통신 중 예외 발생: {exc}",
+                "error": f"TCP 소켓 통신 중 예외 발생: {exc}",
             }
 
 
@@ -324,21 +321,43 @@ class ModernCoffeeKiosk(tk.Tk):
         self.modal_overlay = None
         self.modal_timer_id = None
 
+        # 비동기 통신 스레드 -> 메인 UI 스레드 전달용 GUI 큐 파이프라인
+        self.gui_queue: queue.Queue[tuple] = queue.Queue()
+
         self._build_ui()
         self._refresh_menu_grid()
         self._refresh_cart_ui()
+        self.after(50, self._poll_gui_queue)
+
+    def _poll_gui_queue(self) -> None:
+        """GUI 큐 파이프라인: 백그라운드 TCP 통신 결과를 메인 스레드에서 안전하게 렌더링합니다."""
+        try:
+            while True:
+                event_type, data = self.gui_queue.get_nowait()
+                if event_type == "PAYMENT_RESULT":
+                    if data.get("success"):
+                        self._on_payment_and_order_success(data)
+                    else:
+                        self._on_payment_and_order_error(data.get("error", "알 수 없는 오류"))
+        except queue.Empty:
+            pass
+        finally:
+            self.after(50, self._poll_gui_queue)
 
     def _load_store_menus(self) -> List[Dict[str, Any]]:
-        """중앙 서버의 REST API(GET /menus/{store_id})로 메뉴를 우선 조회합니다."""
+        """중앙 TCP 서버(ACTION_GET_MENUS)로 매장 메뉴를 우선 조회합니다."""
         try:
-            resp = requests.get(
-                f"{BASE_URL}/menus/{STORE_ID}",
-                headers=DEFAULT_HEADERS,
-                verify=False,
+            token = SHARED_API_KEY or os.getenv("BDS_API_KEY", "")
+            resp = send_request(
+                SERVER_HOST,
+                SERVER_PORT,
+                ACTION_GET_MENUS,
+                payload={"store_id": STORE_ID},
+                auth_token=token,
                 timeout=3.0,
             )
-            if resp.status_code == 200:
-                return resp.json()
+            if resp.get("success") and isinstance(resp.get("data"), list):
+                return resp["data"]
         except Exception:
             pass
         # 서버 미기동 등 오프라인 시 읽기 전용 로컬 메뉴 조회 폴백
@@ -1303,13 +1322,10 @@ class ModernCoffeeKiosk(tk.Tk):
         """
         [2~3단계]
         2) 모의 결제 처리: 별도 카드 결제창/대기 없이 즉시 [결제 성공] 승인 (가상 승인번호 발급)
-        3) 서버로 데이터 전송: FastAPI 중앙 서버 POST /order
+        3) 서버로 데이터 전송: 순수 TCP 소켓 (ACTION_CREATE_ORDER) -> gui_queue에 결과 적재
         """
         result = MockPaymentProcessor.process_payment(payload)
-        if result.get("success"):
-            self.after(0, self._on_payment_and_order_success, result)
-        else:
-            self.after(0, self._on_payment_and_order_error, result.get("error", "알 수 없는 오류"))
+        self.gui_queue.put(("PAYMENT_RESULT", result))
 
     def _on_payment_and_order_success(self, result: Dict[str, Any]) -> None:
         """

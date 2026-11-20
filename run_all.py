@@ -1,8 +1,8 @@
 """
 [통합 실행 런처 - run_all.py]
-- 중앙 서버(server.py), 주방 화면(kitchen_client.py),
+- 순수 L4 TCP 중앙 서버(server.py), 주방 화면(kitchen_client.py),
   키오스크 2종(kiosk_client1.py, kiosk_client2.py)을 한 번에 비동기로 실행합니다.
-- 이미 중앙 서버(8443 포트)가 실행 중이면 중복 실행([Errno 10048])을 건너뛰고
+- 이미 중앙 서버(SERVER_PORT, 기본 9000)가 실행 중이면 중복 실행([Errno 10048])을 건너뛰고
   기존 서버에 맞춰 클라이언트 창들만 띄웁니다.
 """
 
@@ -24,7 +24,12 @@ CLIENT_SCRIPTS: List[str] = [
 
 
 def resolve_python_executable() -> str:
-    """프로젝트 패키지가 설치된 Python 인터프리터 경로를 반환합니다."""
+    """프로젝트 가상환경(.venv) 또는 현재 실행 중인 Python 인터프리터 경로를 반환합니다."""
+    venv_python = os.path.join(BASE_DIR, ".venv", "Scripts", "python.exe")
+    if os.path.exists(venv_python):
+        return venv_python
+    if sys.executable and os.path.exists(sys.executable):
+        return sys.executable
     if os.path.exists(PREFERRED_PYTHON_PATH):
         return PREFERRED_PYTHON_PATH
     return sys.executable

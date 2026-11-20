@@ -12,39 +12,33 @@
      - [📋 완료 기록] 클릭 시 전체 완료 주문 내역 팝업 조회
      - SQLite DB 연동으로 이전 완료 주문 기록 자동 로드
   5) 반응형 바둑판(Grid) 자동 정렬
-- 실시간 통신: WebSocket(wss://.../ws/kitchen) 실시간 수신 + 1.5초 주기 REST 폴링 백업
-- 스레드 안전성: root.after() 메시지 큐 위임 방식으로 UI 갱신 충돌 방지
+- 실시간 통신: 순수 L4 TCP 소켓(AF_INET, SOCK_STREAM) 지속 연결 + 비동기 수신 스레드
+- 스레드 안전성: 비동기 수신 스레드 -> queue.Queue -> root.after() GUI 큐 파이프라인 방식으로 UI 갱신 충돌 방지
 """
 
-import asyncio
-import json
-import ssl
+import queue
+import socket
 import threading
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
-from typing import Any, Dict, List, Set, Tuple
-import urllib.error
-import urllib.request
-
-try:
-    import urllib3
-    import requests
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-except ImportError:
-    requests = None
-
-try:
-    import websockets
-except ImportError:
-    websockets = None
+from typing import Any, Dict, List, Optional, Set
 
 from config import (
-    BASE_URL,
-    DEFAULT_HEADERS,
-    POLLING_INTERVAL_SEC,
+    RECONNECT_INTERVAL,
+    SERVER_HOST,
+    SERVER_PORT,
     SHARED_API_KEY,
-    WS_KITCHEN_ENDPOINT,
+)
+from socket_utils import (
+    ACTION_GET_ORDERS,
+    ACTION_NEW_ORDER_BROADCAST,
+    ACTION_REGISTER,
+    ACTION_UPDATE_ORDER_STATUS,
+    make_request,
+    recv_packet,
+    send_packet,
+    send_request,
 )
 
 
@@ -64,22 +58,26 @@ class KitchenDisplaySystem(tk.Tk):
         # 조리 완료 주문 기록 리스트: [{"order_id": int, "store_name": str, ...}]
         self.completed_history: List[Dict[str, Any]] = []
 
-        # 스레드 종료 제어 플래그
+        # 스레드 종료 제어 플래그 및 GUI 큐 파이프라인
         self.is_running = True
+        self._tcp_sock: Optional[socket.socket] = None
+        self.gui_queue: queue.Queue[tuple] = queue.Queue()
 
         self._build_ui()
 
         # DB에서 기존 조리 완료된 주문 기록 자동 로드
         self._load_initial_completed_history()
 
-        # WebSocket 실시간 수신 데몬 스레드 시작 (websockets 설치 시)
-        if websockets is not None:
-            self.ws_thread = threading.Thread(target=self._websocket_worker, daemon=True)
-            self.ws_thread.start()
+        # GUI 큐 폴링 시작 (비동기 수신 스레드 -> 메인 UI 스레드 안전 전달)
+        self.after(50, self._poll_gui_queue)
 
-        # 백그라운드 폴링 데몬 스레드 시작 (1.5초 주기 백업 동기화)
-        self.poll_thread = threading.Thread(target=self._polling_worker, daemon=True)
-        self.poll_thread.start()
+        # 순수 L4 TCP 소켓 비동기 수신 데몬 스레드 시작
+        self.tcp_thread = threading.Thread(
+            target=self._tcp_receiver_worker,
+            name="Kitchen-TCP-Receiver",
+            daemon=True,
+        )
+        self.tcp_thread.start()
 
         # 창 종료 이벤트 바인딩
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -704,104 +702,111 @@ class KitchenDisplaySystem(tk.Tk):
         self.ready_count_lbl.configure(text=f"조리완료: {ready_count}")
 
     # -------------------------------------------------------------
-    # 서버 API 비동기 통신 (requests 미설치 시 urllib.request 폴백)
+    # 순수 L4 TCP 소켓 비동기 통신 & GUI 큐 파이프라인
     # -------------------------------------------------------------
-    def _http_request(self, method: str, url: str) -> Tuple[int, Any]:
-        """requests 우선 사용, 미설치 환경에서는 표준 라이브러리 urllib.request로 폴백합니다."""
-        if requests is not None:
-            resp = requests.request(
-                method,
-                url,
-                headers=DEFAULT_HEADERS,
-                verify=False,
-                timeout=3,
-            )
-            data = resp.json() if resp.status_code == 200 and resp.content else None
-            return resp.status_code, data
-
-        ssl_ctx = ssl._create_unverified_context()
-        req = urllib.request.Request(url, headers=DEFAULT_HEADERS, method=method)
+    def _poll_gui_queue(self) -> None:
+        """GUI 큐 파이프라인: 수신 스레드가 적재한 이벤트를 메인 스레드에서 안전하게 렌더링합니다."""
+        if not self.is_running:
+            return
         try:
-            with urllib.request.urlopen(req, context=ssl_ctx, timeout=3) as resp:
-                raw = resp.read().decode("utf-8")
-                data = json.loads(raw) if raw else None
-                return resp.status, data
-        except urllib.error.HTTPError as err:
-            return err.code, None
+            while True:
+                event_type, data = self.gui_queue.get_nowait()
+                if event_type == "CONN_STATUS":
+                    self._set_connection_status(bool(data))
+                elif event_type == "ORDERS":
+                    self._process_polled_orders(data)
+        except queue.Empty:
+            pass
+        finally:
+            if self.is_running:
+                self.after(50, self._poll_gui_queue)
 
     def _send_accept_status(self, order_id: int) -> None:
         try:
-            url = f"{BASE_URL}/orders/{order_id}/accept"
-            self._http_request("PATCH", url)
+            send_request(
+                SERVER_HOST,
+                SERVER_PORT,
+                ACTION_UPDATE_ORDER_STATUS,
+                payload={"order_id": order_id, "new_status": "COOKING"},
+                auth_token=SHARED_API_KEY,
+                timeout=3.0,
+            )
         except Exception as e:
-            print(f"[KDS] 주문 #{order_id} 접수 통신 실패: {e}")
+            print(f"[KDS] 주문 #{order_id} 접수 TCP 통신 실패: {e}")
 
     def _send_complete_status(self, order_id: int) -> None:
         try:
-            url = f"{BASE_URL}/orders/{order_id}/complete"
-            self._http_request("PATCH", url)
+            send_request(
+                SERVER_HOST,
+                SERVER_PORT,
+                ACTION_UPDATE_ORDER_STATUS,
+                payload={"order_id": order_id, "new_status": "COMPLETED"},
+                auth_token=SHARED_API_KEY,
+                timeout=3.0,
+            )
         except Exception as e:
-            print(f"[KDS] 주문 #{order_id} 조리완료 통신 실패: {e}")
+            print(f"[KDS] 주문 #{order_id} 조리완료 TCP 통신 실패: {e}")
 
-    # -------------------------------------------------------------
-    # WebSocket 실시간 수신 데몬 스레드
-    # -------------------------------------------------------------
-    def _websocket_worker(self) -> None:
-        if websockets is None:
-            return
-        asyncio.run(self._ws_loop())
-
-    async def _ws_loop(self) -> None:
-        if websockets is None:
-            return
-        ws_url = f"{WS_KITCHEN_ENDPOINT}?token={SHARED_API_KEY}"
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-
+    def _tcp_receiver_worker(self) -> None:
+        """
+        백그라운드 비동기 수신 스레드:
+        1) 중앙 TCP 서버(SERVER_HOST:SERVER_PORT)에 연결 후 'kitchen'으로 등록
+        2) 초기 대기/조리중 주문 목록 수신 -> gui_queue 적재
+        3) 서버에서 푸시하는 NEW_ORDER_BROADCAST 패킷을 지속 수신하여 gui_queue 적재
+        """
         while self.is_running:
+            sock: Optional[socket.socket] = None
             try:
-                async with websockets.connect(ws_url, ssl=ssl_context) as ws:
-                    if self.is_running:
-                        self.after(0, self._set_connection_status, True)
-                    while self.is_running:
-                        try:
-                            raw_msg = await asyncio.wait_for(ws.recv(), timeout=1.0)
-                        except asyncio.TimeoutError:
-                            continue
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(3.0)
+                sock.connect((SERVER_HOST, SERVER_PORT))
+                self._tcp_sock = sock
 
-                        msg = json.loads(raw_msg)
-                        event = msg.get("event")
-                        if event == "INIT_ORDERS":
-                            self.after(0, self._process_polled_orders, msg.get("orders", []))
-                        elif event == "NEW_ORDER":
-                            self.after(
-                                0,
-                                self._process_polled_orders,
-                                [{**msg, "status": "PENDING"}],
-                            )
+                # 1. 주방 클라이언트 등록 요청
+                reg_req = make_request(
+                    ACTION_REGISTER,
+                    payload={"client_type": "kitchen"},
+                    auth_token=SHARED_API_KEY,
+                )
+                send_packet(sock, reg_req)
+
+                # 이후 recv_packet 대기를 위한 짧은 타임아웃 설정 (종료 반응성 확보)
+                sock.settimeout(1.0)
+                self.gui_queue.put(("CONN_STATUS", True))
+
+                # 2. 지속 수신 루프
+                while self.is_running:
+                    try:
+                        msg = recv_packet(sock)
+                    except socket.timeout:
+                        continue
+
+                    if msg is None:
+                        break
+
+                    action = msg.get("action")
+                    if action == ACTION_REGISTER and msg.get("success"):
+                        orders = (msg.get("data") or {}).get("orders", [])
+                        self.gui_queue.put(("ORDERS", orders))
+                    elif action == ACTION_NEW_ORDER_BROADCAST and msg.get("success"):
+                        order_data = msg.get("data")
+                        if isinstance(order_data, dict):
+                            self.gui_queue.put(("ORDERS", [order_data]))
+                    elif action == ACTION_GET_ORDERS and msg.get("success"):
+                        self.gui_queue.put(("ORDERS", msg.get("data") or []))
+
             except Exception:
+                pass
+            finally:
+                self._tcp_sock = None
+                if sock is not None:
+                    try:
+                        sock.close()
+                    except OSError:
+                        pass
                 if self.is_running:
-                    self.after(0, self._set_connection_status, False)
-                    await asyncio.sleep(2.0)
-
-    # -------------------------------------------------------------
-    # 백그라운드 폴링 데몬 스레드 (1.5초 주기 백업)
-    # -------------------------------------------------------------
-    def _polling_worker(self) -> None:
-        url = f"{BASE_URL}/orders/kitchen"
-        while self.is_running:
-            try:
-                status_code, order_list = self._http_request("GET", url)
-                if status_code == 200 and order_list is not None:
-                    self.after(0, self._process_polled_orders, order_list)
-                    self.after(0, self._set_connection_status, True)
-                else:
-                    self.after(0, self._set_connection_status, False)
-            except Exception:
-                self.after(0, self._set_connection_status, False)
-
-            time.sleep(POLLING_INTERVAL_SEC)
+                    self.gui_queue.put(("CONN_STATUS", False))
+                    time.sleep(RECONNECT_INTERVAL)
 
     def _set_connection_status(self, is_ok: bool) -> None:
         if not self.is_running:
@@ -829,6 +834,11 @@ class KitchenDisplaySystem(tk.Tk):
 
     def _on_close(self) -> None:
         self.is_running = False
+        if self._tcp_sock is not None:
+            try:
+                self._tcp_sock.close()
+            except OSError:
+                pass
         self.destroy()
 
 

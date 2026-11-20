@@ -1,6 +1,6 @@
-fastapi>=0.110.0
-uvicorn>=0.29.0
-requests>=2.31.0
-cryptography>=42.0.0
-pydantic>=2.6.0
-websockets>=12.0
+# [3주차 L4 TCP 소켓 개편] 외부 웹 프레임워크 의존성 전면 제거
+# 본 프로젝트는 Python 표준 내장 라이브러리만 사용하므로 별도 pip install이 필요하지 않습니다.
+# - 네트워크 통신: socket, struct, json
+# - 멀티스레딩 & 동기화: threading (Lock), queue (Queue)
+# - 데이터베이스: sqlite3
+# - GUI: tkinter
