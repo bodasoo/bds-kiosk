@@ -492,96 +492,13 @@ class ModernGimbapKiosk(tk.Tk):
         )
         kr_title.pack(anchor="w")
 
-        # 우측 액션 영역 (보안 배지 + 전체화면 F11 버튼)
-        actions_frame = tk.Frame(header, bg=CLR_CARD_BG)
-        actions_frame.pack(side=tk.RIGHT, padx=24, pady=12)
-
-        status_badge = tk.Label(
-            actions_frame,
-            text="● HTTPS 안전연결",
-            font=self.fonts.BUTTON_SMALL,
-            bg=CLR_ICON_BG,
-            fg=CLR_MAIN_POINT,
-            padx=12,
-            pady=6,
-            relief=tk.FLAT,
-        )
-        status_badge.pack(side=tk.LEFT, padx=(0, 10))
-
-        self.fs_btn = tk.Button(
-            actions_frame,
-            text="전체화면 F11",
-            font=self.fonts.BUTTON,
-            bg=CLR_MAIN_POINT,
-            fg="#FFFFFF",
-            activebackground=CLR_MENU_BTN,
-            activeforeground="#FFFFFF",
-            relief=tk.FLAT,
-            bd=0,
-            padx=14,
-            pady=6,
-            cursor="hand2",
-            command=self.toggle_fullscreen,
-        )
-        self.fs_btn.pack(side=tk.LEFT)
-
     # --------------------------------------------------------------------------
-    # 좌측 섹션 (배너 + 카테고리 탭 + 메뉴 개수 안내 + 3열 메뉴 그리드)
+    # 좌측 섹션 (카테고리 탭 + 3열 메뉴 그리드)
     # --------------------------------------------------------------------------
     def _build_left_section(self) -> None:
-        # [4. 메인 홍보 배너] - 샌드 베이지(#F4E8DA) 배경, 검은색 테두리 없는 플랫 디자인
-        banner = tk.Frame(
-            self.left_pane,
-            bg=CLR_BANNER_BG,
-            bd=0,
-            relief=tk.FLAT,
-            padx=22,
-            pady=16,
-        )
-        banner.pack(fill=tk.X, pady=8)
-
-        b_text_box = tk.Frame(banner, bg=CLR_BANNER_BG)
-        b_text_box.pack(side=tk.LEFT)
-
-        b_sub = tk.Label(
-            b_text_box,
-            text="GIMBAP NARA SPECIALTY",
-            font=self.fonts.BANNER_SUB,
-            fg=CLR_MAIN_POINT,
-            bg=CLR_BANNER_BG,
-        )
-        b_sub.pack(anchor="w", pady=2)
-
-        b_main = tk.Label(
-            b_text_box,
-            text="오늘도, 기분 좋은 한 끼.",
-            font=self.fonts.BANNER_TITLE,
-            fg=CLR_TEXT_BASE,
-            bg=CLR_BANNER_BG,
-        )
-        b_main.pack(anchor="w")
-
-        b_desc = tk.Label(
-            b_text_box,
-            text="신선하고 정갈한 재료로 정성을 담아 말아냅니다.",
-            font=self.fonts.BODY_DESC,
-            fg=CLR_TEXT_MUTED,
-            bg=CLR_BANNER_BG,
-        )
-        b_desc.pack(anchor="w", pady=3)
-
-        b_icon = tk.Label(
-            banner,
-            text="🍙✨",
-            font=("Segoe UI Emoji", -28),
-            fg=CLR_MAIN_POINT,
-            bg=CLR_BANNER_BG,
-        )
-        b_icon.pack(side=tk.RIGHT, padx=12)
-
         # [5. 메뉴 카테고리 탭] - 가로형 알약 탭 (선택: 토마토 레드 #D94F3D, 미선택: 순백색 #FFFFFF)
         tab_container = tk.Frame(self.left_pane, bg=CLR_ALL_BG)
-        tab_container.pack(fill=tk.X, pady=6)
+        tab_container.pack(fill=tk.X, pady=8)
 
         self.category_buttons: Dict[str, tk.Button] = {}
         categories = ["전체", "김밥류", "식사/분식류"]
@@ -602,19 +519,6 @@ class ModernGimbapKiosk(tk.Tk):
             self.category_buttons[cat] = btn
 
         self._update_tab_styles()
-
-        # [메뉴 개수 안내 바]
-        self.menu_count_bar = tk.Frame(self.left_pane, bg=CLR_ALL_BG)
-        self.menu_count_bar.pack(fill=tk.X, pady=6)
-
-        self.menu_count_lbl = tk.Label(
-            self.menu_count_bar,
-            text=f"총 {len(self.all_menus)}개의 메뉴가 준비되어 있습니다.",
-            font=self.fonts.BODY_DESC,
-            fg=CLR_TEXT_MUTED,
-            bg=CLR_ALL_BG,
-        )
-        self.menu_count_lbl.pack(side=tk.LEFT, padx=4)
 
         # [6. 3열 메뉴 카드 그리드 컨테이너] (독립 스크롤)
         grid_container = tk.Frame(self.left_pane, bg=CLR_CONTENT_BG)
@@ -692,12 +596,6 @@ class ModernGimbapKiosk(tk.Tk):
             filtered = self.all_menus
         else:
             filtered = [m for m in self.all_menus if m["category"] == self.selected_category]
-
-        # 메뉴 개수 안내 텍스트 업데이트
-        if hasattr(self, "menu_count_lbl") and self.menu_count_lbl.winfo_exists():
-            self.menu_count_lbl.config(
-                text=f"총 {len(filtered)}개의 메뉴가 준비되어 있습니다."
-            )
 
         cols = 3
         for c in range(cols):

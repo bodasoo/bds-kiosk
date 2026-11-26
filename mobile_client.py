@@ -1,6 +1,6 @@
 """
 [3주차 L4 TCP 소켓 개편] 가상 모바일 폰 고객용 실시간 푸시 알림 클라이언트 (mobile_client.py)
-- 외부 패키지(HTTP, WebSocket 등) 없이 Python 표준 라이브러리(socket, threading, queue, tkinter, winsound)만 사용합니다.
+- 외부 패키지(HTTP, WebSocket 등) 없이 Python 표준 라이브러리(socket, threading, queue, tkinter)만 사용합니다.
 - 스마트폰 UI 디자인: 세로형(360x700), 스마트폰 상단 상태 바(실시간 시계, 5G, 배터리),
   스크롤 가능한 실시간 알림 피드, 알림 모두 지우기, 서버 연결 상태 표시등.
 - 실시간 통신: L4 TCP 소켓 지속 연결 + 백그라운드 수신 스레드(Daemon) -> queue.Queue -> root.after() GUI 큐 파이프라인.
@@ -16,11 +16,6 @@ import time
 import tkinter as tk
 from tkinter import font as tkfont
 from typing import Any, Dict, List, Optional
-
-try:
-    import winsound
-except ImportError:
-    winsound = None
 
 from config import (
     RECONNECT_INTERVAL,
@@ -134,44 +129,24 @@ class VirtualMobileClient(tk.Tk):
         )
         notch.pack(side=tk.LEFT, expand=True)
 
-        # 우측: 5G, 배터리 표시
-        self.icons_lbl = tk.Label(
-            self.status_bar,
-            text="5G  98% 🔋",
-            bg="#0F172A",
-            fg="#E2E8F0",
-            font=self.font_status,
-            padx=10,
-        )
-        self.icons_lbl.pack(side=tk.RIGHT)
-
         # -----------------------------
         # 2) 앱 헤더 (App Header)
         # -----------------------------
-        self.header_frame = tk.Frame(self.screen_frame, bg="#1E293B", height=56)
+        self.header_frame = tk.Frame(self.screen_frame, bg="#1E293B", height=46)
         self.header_frame.pack(fill=tk.X, side=tk.TOP)
         self.header_frame.pack_propagate(False)
 
         title_container = tk.Frame(self.header_frame, bg="#1E293B")
-        title_container.pack(side=tk.LEFT, padx=12, pady=6)
+        title_container.pack(side=tk.LEFT, padx=14, pady=10)
 
         app_title = tk.Label(
             title_container,
-            text="📱 보다수 모바일 알림",
+            text="알림창",
             bg="#1E293B",
             fg="#FFFFFF",
             font=self.font_app_title,
         )
         app_title.pack(anchor="w")
-
-        app_sub = tk.Label(
-            title_container,
-            text="실시간 주문 / 조리 현황 푸시 서비스",
-            bg="#1E293B",
-            fg="#94A3B8",
-            font=self.font_app_sub,
-        )
-        app_sub.pack(anchor="w")
 
         # -----------------------------
         # 3) 중앙: 스크롤 가능한 알림 피드
@@ -215,7 +190,7 @@ class VirtualMobileClient(tk.Tk):
         self._render_empty_feed()
 
         # -----------------------------
-        # 4) 하단 컨트롤 바 (Status & Buttons)
+        # 4) 하단 컨트롤 바 (Buttons)
         # -----------------------------
         self.bottom_bar = tk.Frame(
             self.screen_frame,
@@ -226,17 +201,6 @@ class VirtualMobileClient(tk.Tk):
         )
         self.bottom_bar.pack(fill=tk.X, side=tk.BOTTOM)
         self.bottom_bar.pack_propagate(False)
-
-        # 좌측: 서버 연결 상태 표시등
-        self.conn_indicator = tk.Label(
-            self.bottom_bar,
-            text="● 서버 연결 중...",
-            bg="#FFFFFF",
-            fg="#F59E0B",
-            font=self.font_conn,
-            padx=12,
-        )
-        self.conn_indicator.pack(side=tk.LEFT, pady=10)
 
         # 우측: [알림 모두 지우기] 버튼
         self.clear_btn = tk.Button(
@@ -434,27 +398,6 @@ class VirtualMobileClient(tk.Tk):
         self.canvas.yview_moveto(0.0)
 
     # -------------------------------------------------------------------------
-    # 사운드 효과 (winsound.Beep 데몬 스레드 재생, root.bell() 폴백)
-    # -------------------------------------------------------------------------
-    def _play_alert_sound(self) -> None:
-        """알림 수신 시 부드러운 2음 차임벨(Chime) 소리를 재생합니다."""
-        threading.Thread(target=self._beep_worker, daemon=True).start()
-
-    def _beep_worker(self) -> None:
-        try:
-            if winsound is not None:
-                winsound.Beep(1046, 100)  # C6 (1046Hz, 100ms)
-                time.sleep(0.03)
-                winsound.Beep(1318, 150)  # E6 (1318Hz, 150ms)
-            else:
-                self.after(0, self.bell)
-        except Exception:
-            try:
-                self.after(0, self.bell)
-            except Exception:
-                pass
-
-    # -------------------------------------------------------------------------
     # GUI 큐 파이프라인 (비동기 수신 스레드 -> Tkinter 메인 스레드 안전 전달)
     # -------------------------------------------------------------------------
     def _poll_gui_queue(self) -> None:
@@ -469,7 +412,6 @@ class VirtualMobileClient(tk.Tk):
                     self._set_connection_status(payload)
                 elif msg_type == "PUSH_NOTIFICATION":
                     self._add_notification_card(payload)
-                    self._play_alert_sound()
         except queue.Empty:
             pass
         finally:
@@ -477,19 +419,8 @@ class VirtualMobileClient(tk.Tk):
                 self.after(100, self._poll_gui_queue)
 
     def _set_connection_status(self, is_connected: bool) -> None:
-        """하단 바 연결 상태 표시등 갱신."""
-        if not self.winfo_exists():
-            return
-        if is_connected:
-            self.conn_indicator.configure(
-                text="● 서버 연결됨",
-                fg="#10B981",  # 초록색
-            )
-        else:
-            self.conn_indicator.configure(
-                text="● 재연결 중...",
-                fg="#EF4444",  # 빨간색
-            )
+        """하단 바 연결 상태 표시등 제거에 따른 안전 폴백."""
+        pass
 
     # -------------------------------------------------------------------------
     # 순수 L4 TCP 소켓 비동기 수신 데몬 스레드 (Worker)

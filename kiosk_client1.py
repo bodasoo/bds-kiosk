@@ -460,97 +460,13 @@ class ModernCoffeeKiosk(tk.Tk):
         )
         kr_title.pack(anchor="w")
 
-        # 우측 액션 영역 (보안 상태 배지 + 전체화면 F11 버튼)
-        actions_frame = tk.Frame(header, bg=CLR_CARD)
-        actions_frame.pack(side=tk.RIGHT, padx=24, pady=12)
-
-        status_badge = tk.Label(
-            actions_frame,
-            text="● HTTPS 보안 주문",
-            font=self.fonts.BUTTON_SMALL,
-            bg=CLR_MAIN_POINT,
-            fg=CLR_DEEP_FOREST,
-            padx=12,
-            pady=6,
-            relief=tk.FLAT,
-        )
-        status_badge.pack(side=tk.LEFT, padx=(0, 10))
-
-        self.fs_btn = tk.Button(
-            actions_frame,
-            text="전체화면 F11",
-            font=self.fonts.BUTTON,
-            bg=CLR_DEEP_FOREST,
-            fg="#FFFFFF",
-            activebackground=CLR_FOREST_HOVER,
-            activeforeground="#FFFFFF",
-            relief=tk.FLAT,
-            bd=0,
-            padx=14,
-            pady=6,
-            cursor="hand2",
-            command=self.toggle_fullscreen,
-        )
-        self.fs_btn.pack(side=tk.LEFT)
-
     # --------------------------------------------------------------------------
-    # 2. 좌측 섹션 (배너 + 카테고리 탭 + 메뉴 개수 + 메뉴 그리드)
+    # 2. 좌측 섹션 (카테고리 탭 + 메뉴 그리드)
     # --------------------------------------------------------------------------
     def _build_left_section(self) -> None:
-        # (1) 상단 감성 세이지 민트 배너 (테두리 없는 부드러운 플랫 디자인)
-        banner = tk.Frame(
-            self.left_pane,
-            bg=CLR_MAIN_POINT,
-            bd=0,
-            relief=tk.FLAT,
-            padx=22,
-            pady=16,
-        )
-        banner.pack(fill=tk.X, pady=8)
-
-        b_text_box = tk.Frame(banner, bg=CLR_MAIN_POINT)
-        b_text_box.pack(side=tk.LEFT)
-
-        b_sub = tk.Label(
-            b_text_box,
-            text="BODASU SPECIALTY CAFE",
-            font=self.fonts.BANNER_SUB,
-            fg=CLR_PRICE_ACCENT,
-            bg=CLR_MAIN_POINT,
-        )
-        b_sub.pack(anchor="w", pady=2)
-
-        b_main = tk.Label(
-            b_text_box,
-            text="오늘도, 기분 좋은 한 잔.",
-            font=self.fonts.BANNER_TITLE,
-            fg=CLR_TEXT,
-            bg=CLR_MAIN_POINT,
-        )
-        b_main.pack(anchor="w")
-
-        b_desc = tk.Label(
-            b_text_box,
-            text="신선하게 로스팅한 원두와 프리미엄 재료로 정성을 담아 만듭니다.",
-            font=self.fonts.BODY_DESC,
-            fg=CLR_PRICE_ACCENT,
-            bg=CLR_MAIN_POINT,
-        )
-        b_desc.pack(anchor="w", pady=3)
-
-        # 배너 우측 일러스트 아이콘 (커피잔과 반짝임)
-        b_icon = tk.Label(
-            banner,
-            text="☕✨",
-            font=("Segoe UI Emoji", -28),
-            fg=CLR_DEEP_FOREST,
-            bg=CLR_MAIN_POINT,
-        )
-        b_icon.pack(side=tk.RIGHT, padx=12)
-
-        # (2) 가로 알약(Pill) 카테고리 탭
+        # (1) 가로 알약(Pill) 카테고리 탭
         tab_container = tk.Frame(self.left_pane, bg=CLR_ALL_BG)
-        tab_container.pack(fill=tk.X, pady=6)
+        tab_container.pack(fill=tk.X, pady=8)
 
         self.category_buttons: Dict[str, tk.Button] = {}
         categories = ["전체", "커피", "스무디", "차/기타"]
@@ -572,20 +488,7 @@ class ModernCoffeeKiosk(tk.Tk):
 
         self._update_tab_styles()
 
-        # (3) 메뉴 개수 안내 바
-        self.menu_count_bar = tk.Frame(self.left_pane, bg=CLR_ALL_BG)
-        self.menu_count_bar.pack(fill=tk.X, pady=6)
-
-        self.menu_count_lbl = tk.Label(
-            self.menu_count_bar,
-            text=f"총 {len(self.all_menus)}개의 메뉴가 준비되어 있습니다.",
-            font=self.fonts.BODY_DESC,
-            fg=CLR_TEXT_MUTED,
-            bg=CLR_ALL_BG,
-        )
-        self.menu_count_lbl.pack(side=tk.LEFT, padx=4)
-
-        # (4) 스크롤 가능한 메뉴 카드 그리드 컨테이너 (3열 메뉴 카드)
+        # (2) 스크롤 가능한 메뉴 카드 그리드 컨테이너 (3열 메뉴 카드)
         grid_container = tk.Frame(self.left_pane, bg=CLR_CONTENT_BG)
         grid_container.pack(fill=tk.BOTH, expand=True)
 
@@ -661,9 +564,6 @@ class ModernCoffeeKiosk(tk.Tk):
             filtered = self.all_menus
         else:
             filtered = [m for m in self.all_menus if m["category"] == self.selected_category]
-
-        if hasattr(self, "menu_count_lbl") and self.menu_count_lbl.winfo_exists():
-            self.menu_count_lbl.config(text=f"총 {len(filtered)}개의 메뉴가 준비되어 있습니다.")
 
         cols = 3
         for c in range(cols):
